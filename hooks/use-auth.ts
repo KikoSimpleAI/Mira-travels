@@ -1,35 +1,35 @@
-"use client"
+'use client'
 
-import { useState, useEffect, createContext, useContext } from 'react'
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { 
   User,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signOut as firebaseSignOut,
+  signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
+  sendPasswordResetEmail,
   updateProfile
 } from 'firebase/auth'
-import { doc, setDoc, getDoc } from 'firebase/firestore'
-import { auth, db } from '@/lib/firebase'
+import { auth } from '@/lib/firebase'
 
 interface AuthContextType {
   user: User | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string, name: string) => Promise<void>
+  signUp: (email: string, password: string, displayName?: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
-  signOut: () => Promise<void>
-  error: string | null
+  logout: () => Promise<void>
+  resetPassword: (email: string) => Promise<void>
+  updateUserProfile: (displayName: string, photoURL?: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -42,116 +42,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      setError(null)
       await signInWithEmailAndPassword(auth, email, password)
-    } catch (err: any) {
-      setError(getErrorMessage(err.code))
-      throw err
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to sign in')
     }
   }
 
-  const signUp = async (email: string, password: string, name: string) => {
+  const signUp = async (email: string, password: string, displayName?: string) => {
     try {
-      setError(null)
-      const { user } = await createUserWithEmailAndPassword(auth, email, password)
-      
-      // Update the user's display name
-      await updateProfile(user, { displayName: name })
-      
-      // Create user document in Firestore
-      await setDoc(doc(db, 'users', user.uid), {
-        name,
-        email,
-        createdAt: new Date().toISOString(),
-        preferences: {
-          rating: 80,
-          safety: 70,
-          cost: 60,
-          climate: 50,
-          activities: 70,
-          walkability: 40
-        }
-      })
-    } catch (err: any) {
-      setError(getErrorMessage(err.code))
-      throw err
+      const result = await createUserWithEmailAndPassword(auth, email, password)
+      if (displayName && result.user) {
+        await updateProfile(result.user, { displayName })
+      }
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to create account')
     }
   }
 
   const signInWithGoogle = async () => {
     try {
-      setError(null)
       const provider = new GoogleAuthProvider()
-      const { user } = await signInWithPopup(auth, provider)
-      
-      // Check if user document exists, create if not
-      const userDoc = await getDoc(doc(db, 'users', user.uid))
-      if (!userDoc.exists()) {
-        await setDoc(doc(db, 'users', user.uid), {
-          name: user.displayName || 'Google User',
-          email: user.email,
-          createdAt: new Date().toISOString(),
-          preferences: {
-            rating: 80,
-            safety: 70,
-            cost: 60,
-            climate: 50,
-            activities: 70,
-            walkability: 40
-          }
-        })
-      }
-    } catch (err: any) {
-      setError(getErrorMessage(err.code))
-      throw err
+      await signInWithPopup(auth, provider)
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to sign in with Google')
     }
   }
 
-  const signOut = async () => {
+  const logout = async () => {
     try {
-      setError(null)
-      await firebaseSignOut(auth)
-    } catch (err: any) {
-      setError(getErrorMessage(err.code))
-      throw err
+      await signOut(auth)
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to sign out')
     }
   }
 
-  const getErrorMessage = (errorCode: string): string => {
-    switch (errorCode) {
-      case 'auth/user-not-found':
-        return 'No account found with this email address.'
-      case 'auth/wrong-password':
-        return 'Incorrect password. Please try again.'
-      case 'auth/email-already-in-use':
-        return 'An account with this email already exists.'
-      case 'auth/weak-password':
-        return 'Password should be at least 6 characters long.'
-      case 'auth/invalid-email':
-        return 'Please enter a valid email address.'
-      case 'auth/too-many-requests':
-        return 'Too many failed attempts. Please try again later.'
-      case 'auth/popup-closed-by-user':
-        return 'Sign-in was cancelled. Please try again.'
-      case 'auth/popup-blocked':
-        return 'Pop-up was blocked. Please allow pop-ups and try again.'
-      default:
-        return 'An error occurred. Please try again.'
+  const resetPassword = async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email)
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to send password reset email')
     }
   }
 
-  const value = {
+  const updateUserProfile = async (displayName: string, photoURL?: string) => {
+    try {
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, { displayName, photoURL })
+        setUser({ ...auth.currentUser })
+      }
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to update profile')
+    }
+  }
+
+  const contextValue: AuthContextType = {
     user,
     loading,
     signIn,
     signUp,
     signInWithGoogle,
-    signOut,
-    error
+    logout,
+    resetPassword,
+    updateUserProfile
   }
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   )

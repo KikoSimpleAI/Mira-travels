@@ -360,7 +360,7 @@ export default function HomePage() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/profile">
                 <Button size="lg" variant="secondary" className="px-8 py-4">
-                  <User className="mr-2 h-5 w-5" />
+                  <Users className="mr-2 h-5 w-5" />
                   Customize Your Profile
                 </Button>
               </Link>

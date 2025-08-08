@@ -109,3 +109,32 @@ export async function upsertUserProfile(profile: UserProfile): Promise<void> {
     { merge: true }
   )
 }
+
+export async function getUserCorePreferences(uid: string): Promise<UserCorePreferences | null> {
+  const profile = await getUserProfile(uid)
+  return profile?.preferences ?? null
+}
+
+export async function upsertUserCorePreferences(
+  uid: string,
+  prefs: UserCorePreferences
+): Promise<void> {
+  const app = getFirebaseApp()
+  const db = getFirestore(app)
+  const ref = doc(db, "users", uid)
+
+  await setDoc(
+    ref,
+    {
+      preferences: {
+        travelStyle: prefs.travelStyle,
+        budget: prefs.budget,
+        companions: prefs.companions,
+        // ensure only known interests are saved, de-duplicated
+        interests: Array.from(new Set(prefs.interests)).filter((i) => KEY_INTERESTS.includes(i)),
+      },
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  )
+}

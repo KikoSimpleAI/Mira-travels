@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "./firebase";
 
 export interface UserPreferences {
@@ -13,6 +13,7 @@ export interface UserProfile {
   email?: string | null;
   displayName?: string | null;
   username?: string;
+  usernameLower?: string;
   photoURL?: string | null;
   homeBase?: string;
   bio?: string;
@@ -36,7 +37,7 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     if (userDocSnap.exists()) {
       return { uid, ...userDocSnap.data() } as UserProfile;
     } else {
-      console.log("No such document!");
+      console.log("No such document for UID:", uid);
       return null;
     }
   } catch (error) {
@@ -52,8 +53,13 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
  */
 export async function updateUserProfile(uid: string, data: Partial<UserProfile>): Promise<void> {
   const userDocRef = doc(db, "users", uid);
+  const profileData = { ...data };
+  if (profileData.username) {
+    profileData.usernameLower = profileData.username.toLowerCase();
+  }
+  
   await setDoc(userDocRef, { 
-    ...data, 
+    ...profileData, 
     updatedAt: serverTimestamp() 
   }, { merge: true });
 }
@@ -65,7 +71,8 @@ export async function updateUserProfile(uid: string, data: Partial<UserProfile>)
  */
 export async function isUsernameAvailable(username: string): Promise<boolean> {
     if (!username) return false;
-    const usernameDocRef = doc(db, 'usernames', username.toLowerCase());
-    const docSnap = await getDoc(usernameDocRef);
-    return !docSnap.exists();
+    const lowerCaseUsername = username.toLowerCase();
+    const q = query(collection(db, "users"), where("usernameLower", "==", lowerCaseUsername));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.empty;
 }

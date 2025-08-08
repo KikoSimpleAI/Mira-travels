@@ -11,10 +11,12 @@ import {
   enableIndexedDbPersistence,
   type Firestore,
 } from "firebase/firestore"
+import { getStorage, type FirebaseStorage } from "firebase/storage"
 
 let app: FirebaseApp | undefined
 let auth: Auth | undefined
 let db: Firestore | undefined
+let storage: FirebaseStorage | undefined
 
 export function getFirebaseApp() {
   if (!app) {
@@ -78,4 +80,12 @@ export function getFirebaseDb() {
     })
   }
   return db
+}
+
+export function getFirebaseStorage() {
+  if (!storage) {
+    const app = getFirebaseApp()
+    storage = getStorage(app)
+  }
+  return storage
 }

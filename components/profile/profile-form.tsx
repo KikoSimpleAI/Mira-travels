@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useAuth } from "@/components/auth/auth-provider"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -24,7 +24,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Loader2, Check, AlertCircle } from 'lucide-react'
+import { Progress } from "@/components/ui/progress"
+import { Loader2, Check, AlertCircle, Upload, ImageIcon } from 'lucide-react'
+import { getFirebaseStorage } from "@/lib/firebase"
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
 
 function Fieldset({ children, legend }: { children: React.ReactNode; legend: string }) {
   return (
@@ -33,6 +36,40 @@ function Fieldset({ children, legend }: { children: React.ReactNode; legend: str
       {children}
     </fieldset>
   )
+}
+
+// Downscale an image file to a max dimension while keeping aspect ratio
+async function downscaleImage(file: File, maxDim = 512, mime: "image/jpeg" | "image/png" = "image/jpeg", quality = 0.9): Promise<Blob> {
+  const dataUrl: string = await new Promise((resolve, reject) => {
+    const fr = new FileReader()
+    fr.onload = () => resolve(fr.result as string)
+    fr.onerror = reject
+    fr.readAsDataURL(file)
+  })
+
+  const img: HTMLImageElement = await new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = reject
+    image.src = dataUrl
+  })
+
+  const { width, height } = img
+  const scale = Math.min(1, maxDim / Math.max(width, height))
+  const targetW = Math.max(1, Math.round(width * scale))
+  const targetH = Math.max(1, Math.round(height * scale))
+
+  const canvas = document.createElement("canvas")
+  canvas.width = targetW
+  canvas.height = targetH
+  const ctx = canvas.getContext("2d")
+  if (!ctx) throw new Error("Canvas 2D context not available")
+  ctx.drawImage(img, 0, 0, targetW, targetH)
+
+  const blob: Blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Failed to encode image"))), mime, quality)
+  })
+  return blob
 }
 
 export default function ProfileForm() {
@@ -61,6 +98,13 @@ export default function ProfileForm() {
   const [nameErr, setNameErr] = useState<string | null>(null)
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null)
 
+  // Upload states
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [uploadPct, setUploadPct] = useState<number>(0)
+  const [uploading, setUploading] = useState<boolean>(false)
+
   useEffect(() => {
     let mounted = true
     const run = async () => {
@@ -76,7 +120,6 @@ export default function ProfileForm() {
           setPhotoURL(prof.photoURL || "")
           setHomeBase(prof.homeBase || "")
           setBio(prof.bio || "")
-          // If legacy interests exist, use them; else fall back to pref interests
           const prefInterests = prof.preferences?.interests || []
           setInterests(Array.from(new Set([...(prof.interests || []), ...prefInterests])))
           if (prof.preferences) {
@@ -85,7 +128,6 @@ export default function ProfileForm() {
             setCompanions(prof.preferences.companions)
           }
         } else {
-          // Seed with best-guess defaults
           setDisplayName(user.displayName || "")
           setPhotoURL(user.photoURL || "")
         }
@@ -95,7 +137,9 @@ export default function ProfileForm() {
       }
     }
     run()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+    }
   }, [user])
 
   // Debounced username availability check
@@ -106,14 +150,11 @@ export default function ProfileForm() {
       return
     }
     setNameErr(null)
-
-    // If unchanged, skip availability check
     if (originalUsername && username.toLowerCase() === originalUsername.toLowerCase()) {
       setIsAvailable(true)
       setChecking(false)
       return
     }
-
     let active = true
     setChecking(true)
     const id = setTimeout(async () => {
@@ -125,17 +166,71 @@ export default function ProfileForm() {
         if (active) setChecking(false)
       }
     }, 450)
-    return () => { active = false; clearTimeout(id) }
+    return () => {
+      active = false
+      clearTimeout(id)
+    }
   }, [username, originalUsername])
 
   const canSave = useMemo(() => {
     const baseValid = user && displayName.trim() && username.trim()
     const unameValid = isAvailable !== false && !nameErr
-    return !!baseValid && !!unameValid && !busy
-  }, [user, displayName, username, isAvailable, nameErr, busy])
+    return !!baseValid && !!unameValid && !busy && !uploading
+  }, [user, displayName, username, isAvailable, nameErr, busy, uploading])
 
   const toggleInterest = (val: string) => {
-    setInterests((prev) => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])
+    setInterests((prev) => (prev.includes(val) ? prev.filter((v) => v !== val) : [...prev, val]))
+  }
+
+  const onPickFile = () => {
+    fileInputRef.current?.click()
+  }
+
+  const onFileChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSelectedFile(file)
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    const url = URL.createObjectURL(file)
+    setPreviewUrl(url)
+    setUploadPct(0)
+  }
+
+  const uploadAvatar = async () => {
+    if (!user || !selectedFile) return
+    setUploading(true)
+    try {
+      // Downscale before upload
+      const resized = await downscaleImage(selectedFile, 512, "image/jpeg", 0.9)
+      const storage = getFirebaseStorage()
+      const objectPath = `users/${user.uid}/avatar-${Date.now()}.jpg`
+      const storageRef = ref(storage, objectPath)
+      const task = uploadBytesResumable(storageRef, resized, { contentType: "image/jpeg" })
+      await new Promise<void>((resolve, reject) => {
+        task.on(
+          "state_changed",
+          (snap) => {
+            const pct = (snap.bytesTransferred / snap.totalBytes) * 100
+            setUploadPct(Math.round(pct))
+          },
+          (err) => reject(err),
+          () => resolve()
+        )
+      })
+      const url = await getDownloadURL(storageRef)
+      setPhotoURL(url)
+      toast({ title: "Avatar uploaded", description: "Your profile photo has been updated." })
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e?.message || "Please try again.", variant: "destructive" })
+    } finally {
+      setUploading(false)
+      setSelectedFile(null)
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+        setPreviewUrl(null)
+      }
+      setUploadPct(0)
+    }
   }
 
   const save = async () => {
@@ -151,9 +246,7 @@ export default function ProfileForm() {
         photoURL: photoURL || undefined,
         homeBase: homeBase || undefined,
         bio: bio || undefined,
-        // Keep root interests for compatibility with older UI
         interests,
-        // Unified preferences live under profile.preferences
         preferences: {
           travelStyle,
           budget,
@@ -204,7 +297,7 @@ export default function ProfileForm() {
       <Card>
         <CardHeader>
           <CardTitle>Profile</CardTitle>
-          <CardDescription>Update your basic information.</CardDescription>
+          <CardDescription>Update your basic information and avatar.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-start gap-4">
@@ -212,15 +305,18 @@ export default function ProfileForm() {
               <AvatarImage src={photoURL || "/placeholder.svg?height=64&width=64&query=user-avatar"} alt="Profile photo" />
               <AvatarFallback>{(displayName || user.email || "U").slice(0, 1).toUpperCase()}</AvatarFallback>
             </Avatar>
+
             <div className="grid gap-4 w-full sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="displayName">Display name</Label>
                 <Input id="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="photoURL">Avatar URL</Label>
-                <Input id="photoURL" value={photoURL} onChange={(e) => setPhotoURL(e.target.value)} placeholder="https://..." />
+                <Label htmlFor="homeBase">Home base</Label>
+                <Input id="homeBase" value={homeBase} onChange={(e) => setHomeBase(e.target.value)} placeholder="e.g., Lisbon, PT" />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>
                 <div className="relative">
@@ -241,13 +337,61 @@ export default function ProfileForm() {
                 {nameErr && <p className="text-xs text-red-600">{nameErr}</p>}
                 {isAvailable === false && <p className="text-xs text-red-600">That username is taken.</p>}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="homeBase">Home base</Label>
-                <Input id="homeBase" value={homeBase} onChange={(e) => setHomeBase(e.target.value)} placeholder="e.g., Lisbon, PT" />
-              </div>
+
               <div className="sm:col-span-2 space-y-2">
                 <Label htmlFor="bio">Bio</Label>
                 <Textarea id="bio" rows={4} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell us about you" />
+              </div>
+
+              {/* Avatar upload Section */}
+              <div className="sm:col-span-2 space-y-3">
+                <Label>Profile photo</Label>
+
+                {/* Optional URL field (still supported for power users) */}
+                <div className="space-y-1">
+                  <Label htmlFor="photoURL" className="text-xs text-muted-foreground">Direct image URL (optional)</Label>
+                  <Input id="photoURL" value={photoURL} onChange={(e) => setPhotoURL(e.target.value)} placeholder="https://..." />
+                </div>
+
+                <div className="rounded-md border p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={onFileChange}
+                    />
+                    <Button type="button" variant="secondary" onClick={onPickFile}>
+                      <ImageIcon className="mr-2 h-4 w-4" />
+                      Choose Image
+                    </Button>
+                    {selectedFile && (
+                      <div className="text-sm text-muted-foreground">
+                        {selectedFile.name} · {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                      </div>
+                    )}
+                    <div className="flex-1" />
+                    <Button type="button" onClick={uploadAvatar} disabled={!selectedFile || uploading}>
+                      {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                      {uploading ? "Uploading..." : "Upload"}
+                    </Button>
+                  </div>
+
+                  {previewUrl && (
+                    <div className="mt-3 flex items-start gap-4">
+                      <img
+                        src={previewUrl || "/placeholder.svg"}
+                        alt="Avatar preview"
+                        className="h-20 w-20 rounded-md object-cover"
+                      />
+                      <div className="flex-1">
+                        <Progress value={uploadPct} className="h-2" />
+                        <div className="mt-1 text-xs text-muted-foreground">{uploadPct}%</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -264,10 +408,13 @@ export default function ProfileForm() {
             <Fieldset legend="Travel Style / Vibe">
               <div className="grid gap-2">
                 {TRAVEL_STYLE_OPTIONS.map((opt) => (
-                  <label key={opt.value} className={cn(
-                    "flex items-start gap-3 rounded-md border p-3 hover:bg-muted cursor-pointer",
-                    travelStyle === opt.value && "border-primary"
-                  )}>
+                  <label
+                    key={opt.value}
+                    className={cn(
+                      "flex items-start gap-3 rounded-md border p-3 hover:bg-muted cursor-pointer",
+                      travelStyle === opt.value && "border-primary"
+                    )}
+                  >
                     <input
                       type="radio"
                       name="travelStyle"
@@ -288,10 +435,13 @@ export default function ProfileForm() {
             <Fieldset legend="Budget Level">
               <div className="grid gap-2">
                 {BUDGET_OPTIONS.map((opt) => (
-                  <label key={opt.value} className={cn(
-                    "flex items-start gap-3 rounded-md border p-3 hover:bg-muted cursor-pointer",
-                    budget === opt.value && "border-primary"
-                  )}>
+                  <label
+                    key={opt.value}
+                    className={cn(
+                      "flex items-start gap-3 rounded-md border p-3 hover:bg-muted cursor-pointer",
+                      budget === opt.value && "border-primary"
+                    )}
+                  >
                     <input
                       type="radio"
                       name="budget"
@@ -313,10 +463,13 @@ export default function ProfileForm() {
           <Fieldset legend="Companions">
             <div className="grid gap-2 sm:grid-cols-4">
               {COMPANION_OPTIONS.map((opt) => (
-                <label key={opt.value} className={cn(
-                  "flex items-center gap-3 rounded-md border p-3 hover:bg-muted cursor-pointer",
-                  companions === opt.value && "border-primary"
-                )}>
+                <label
+                  key={opt.value}
+                  className={cn(
+                    "flex items-center gap-3 rounded-md border p-3 hover:bg-muted cursor-pointer",
+                    companions === opt.value && "border-primary"
+                  )}
+                >
                   <input
                     type="radio"
                     name="companions"
@@ -341,11 +494,20 @@ export default function ProfileForm() {
                     onClick={() => toggleInterest(k)}
                     className={cn(
                       "px-3 py-1.5 rounded-full text-sm border transition-colors",
-                      active ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted border-muted-foreground/20"
+                      active
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background hover:bg-muted border-muted-foreground/20"
                     )}
                     aria-pressed={active}
                   >
-                    {active ? <span className="inline-flex items-center gap-1"><Check className="h-3.5 w-3.5" />{k}</span> : k}
+                    {active ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Check className="h-3.5 w-3.5" />
+                        {k}
+                      </span>
+                    ) : (
+                      k
+                    )}
                   </button>
                 )
               })}

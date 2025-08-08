@@ -1,8 +1,6 @@
 "use client"
 
-import { useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
-import Link from 'next/link'
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider"
 import { Label } from "@/components/ui/label"
 import { DestinationComparison } from "@/components/destination-comparison"
-import { Search, MapPin, Star, Users, Filter, ContrastIcon as Compare, X, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, MapPin, Star, Filter, ContrastIcon as Compare, X, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react'
 import Image from "next/image"
-import { DESTINATIONS } from '@/lib/destinations-data'
+import Link from "next/link"
 
 interface Destination {
   id: string
@@ -56,9 +54,248 @@ interface AdvancedFilters {
   minWalkability: number
 }
 
+// Existing destinations (unchanged except for keeping structure). New destinations appended at the end.
+const destinations: Destination[] = [
+  {
+    id: "paris",
+    name: "Paris",
+    country: "France",
+    region: "Île-de-France",
+    description: "The City of Light with world-class dining, museums, and romance",
+    image: "/placeholder.svg?height=200&width=300&text=Paris",
+    rating: 4.8,
+    reviewCount: 125847,
+    poiCount: 2847,
+    categories: ["Culture", "Art", "Food", "Romance", "History"],
+    budget: "Mid-range",
+    bestTimeToVisit: "April-June, September-October",
+    climate: { avgTemp: 15, rainfall: 50, sunshine: 6 },
+    costs: { accommodation: 120, food: 45, activities: 35, transport: 15 },
+    safety: { overall: 8 },
+    transportation: { walkability: 9 }
+  },
+  {
+    id: "tokyo",
+    name: "Tokyo",
+    country: "Japan",
+    region: "Kanto",
+    description: "Modern metropolis blending tradition with cutting-edge culture",
+    image: "/placeholder.svg?height=200&width=300&text=Tokyo",
+    rating: 4.9,
+    reviewCount: 156789,
+    poiCount: 3421,
+    categories: ["Technology", "Culture", "Food", "Shopping", "Temples"],
+    budget: "Luxury",
+    bestTimeToVisit: "March-May, September-November",
+    climate: { avgTemp: 18, rainfall: 60, sunshine: 5 },
+    costs: { accommodation: 180, food: 60, activities: 45, transport: 25 },
+    safety: { overall: 10 },
+    transportation: { walkability: 8 }
+  },
+  {
+    id: "new-york",
+    name: "New York City",
+    country: "United States",
+    region: "New York",
+    description: "The city that never sleeps with endless entertainment options",
+    image: "/placeholder.svg?height=200&width=300&text=New+York",
+    rating: 4.7,
+    reviewCount: 234567,
+    poiCount: 4123,
+    categories: ["Culture", "Entertainment", "Food", "Shopping", "Architecture"],
+    budget: "Luxury",
+    bestTimeToVisit: "April-June, September-November",
+    climate: { avgTemp: 16, rainfall: 45, sunshine: 7 },
+    costs: { accommodation: 200, food: 70, activities: 50, transport: 30 },
+    safety: { overall: 7 },
+    transportation: { walkability: 9 }
+  },
+  {
+    id: "barcelona",
+    name: "Barcelona",
+    country: "Spain",
+    region: "Catalonia",
+    description: "Mediterranean charm with stunning architecture and vibrant culture",
+    image: "/placeholder.svg?height=200&width=300&text=Barcelona",
+    rating: 4.6,
+    reviewCount: 87456,
+    poiCount: 1654,
+    categories: ["Architecture", "Beach", "Nightlife", "Food", "Art"],
+    budget: "Mid-range",
+    bestTimeToVisit: "May-June, September-October",
+    climate: { avgTemp: 20, rainfall: 35, sunshine: 8 },
+    costs: { accommodation: 90, food: 35, activities: 25, transport: 12 },
+    safety: { overall: 8 },
+    transportation: { walkability: 8 }
+  },
+  {
+    id: "rome",
+    name: "Rome",
+    country: "Italy",
+    region: "Lazio",
+    description: "The Eternal City where ancient history meets modern life",
+    image: "/placeholder.svg?height=200&width=300&text=Rome",
+    rating: 4.7,
+    reviewCount: 98234,
+    poiCount: 1923,
+    categories: ["History", "Culture", "Food", "Architecture", "Religion"],
+    budget: "Mid-range",
+    bestTimeToVisit: "April-June, September-November",
+    climate: { avgTemp: 19, rainfall: 40, sunshine: 7 },
+    costs: { accommodation: 100, food: 40, activities: 30, transport: 15 },
+    safety: { overall: 7 },
+    transportation: { walkability: 7 }
+  },
+  {
+    id: "london",
+    name: "London",
+    country: "United Kingdom",
+    region: "England",
+    description: "Historic capital with royal palaces, world-class museums, and diverse culture",
+    image: "/placeholder.svg?height=200&width=300&text=London",
+    rating: 4.5,
+    reviewCount: 189456,
+    poiCount: 2756,
+    categories: ["History", "Culture", "Museums", "Royal", "Theater"],
+    budget: "Mid-range",
+    bestTimeToVisit: "May-September",
+    climate: { avgTemp: 12, rainfall: 55, sunshine: 4 },
+    costs: { accommodation: 140, food: 50, activities: 40, transport: 20 },
+    safety: { overall: 8 },
+    transportation: { walkability: 8 }
+  },
+  {
+    id: "bali",
+    name: "Bali",
+    country: "Indonesia",
+    region: "Bali",
+    description: "Tropical paradise with stunning beaches, temples, and rich culture",
+    image: "/placeholder.svg?height=200&width=300&text=Bali",
+    rating: 4.4,
+    reviewCount: 67890,
+    poiCount: 1234,
+    categories: ["Beach", "Culture", "Nature", "Temples", "Wellness"],
+    budget: "Budget",
+    bestTimeToVisit: "April-October",
+    climate: { avgTemp: 27, rainfall: 80, sunshine: 8 },
+    costs: { accommodation: 40, food: 15, activities: 20, transport: 8 },
+    safety: { overall: 6 },
+    transportation: { walkability: 5 }
+  },
+  {
+    id: "dubai",
+    name: "Dubai",
+    country: "UAE",
+    region: "Dubai",
+    description: "Futuristic city with luxury shopping, modern architecture, and desert adventures",
+    image: "/placeholder.svg?height=200&width=300&text=Dubai",
+    rating: 4.3,
+    reviewCount: 89123,
+    poiCount: 987,
+    categories: ["Luxury", "Shopping", "Architecture", "Desert", "Modern"],
+    budget: "Luxury",
+    bestTimeToVisit: "November-March",
+    climate: { avgTemp: 28, rainfall: 10, sunshine: 10 },
+    costs: { accommodation: 250, food: 80, activities: 60, transport: 25 },
+    safety: { overall: 9 },
+    transportation: { walkability: 6 }
+  },
+
+  // NEW: Added destinations with real images.
+  {
+    id: "marrakech",
+    name: "Marrakech",
+    country: "Morocco",
+    region: "Marrakesh-Safi",
+    description: "Vibrant souks, historic medina, and the Koutoubia Mosque at the foot of the Atlas Mountains.",
+    image: "/images/destinations/marrakech.png",
+    rating: 4.6,
+    reviewCount: 56321,
+    poiCount: 980,
+    categories: ["Markets", "Culture", "History", "Food", "Desert"],
+    budget: "Mid-range",
+    bestTimeToVisit: "March-May, September-November",
+    climate: { avgTemp: 22, rainfall: 20, sunshine: 9 },
+    costs: { accommodation: 60, food: 20, activities: 20, transport: 8 },
+    safety: { overall: 7 },
+    transportation: { walkability: 7 }
+  },
+  {
+    id: "positano",
+    name: "Positano",
+    country: "Italy",
+    region: "Campania",
+    description: "Clifftop pastel houses overlooking the Amalfi Coast with chic beaches and coastal paths.",
+    image: "/images/destinations/positano.png",
+    rating: 4.7,
+    reviewCount: 22345,
+    poiCount: 350,
+    categories: ["Beach", "Scenic", "Food", "Romance", "Hiking"],
+    budget: "Luxury",
+    bestTimeToVisit: "May-September",
+    climate: { avgTemp: 23, rainfall: 25, sunshine: 9 },
+    costs: { accommodation: 220, food: 70, activities: 60, transport: 20 },
+    safety: { overall: 8 },
+    transportation: { walkability: 6 }
+  },
+  {
+    id: "portofino",
+    name: "Portofino",
+    country: "Italy",
+    region: "Liguria",
+    description: "Glamorous harbor village with colorful houses, yachts, and lush coastal hills.",
+    image: "/images/destinations/portofino.png",
+    rating: 4.6,
+    reviewCount: 11234,
+    poiCount: 180,
+    categories: ["Harbor", "Scenic", "Food", "Boating", "Romance"],
+    budget: "Luxury",
+    bestTimeToVisit: "May-September",
+    climate: { avgTemp: 22, rainfall: 40, sunshine: 8 },
+    costs: { accommodation: 240, food: 80, activities: 65, transport: 25 },
+    safety: { overall: 9 },
+    transportation: { walkability: 6 }
+  },
+  {
+    id: "marseille",
+    name: "Marseille",
+    country: "France",
+    region: "Provence-Alpes-Côte d'Azur",
+    description: "Historic port city with calanques, fresh seafood, and a vibrant multicultural scene.",
+    image: "/images/destinations/marseille.png",
+    rating: 4.4,
+    reviewCount: 34567,
+    poiCount: 1200,
+    categories: ["Harbor", "Culture", "Food", "Beaches", "History"],
+    budget: "Mid-range",
+    bestTimeToVisit: "April-June, September-October",
+    climate: { avgTemp: 18, rainfall: 45, sunshine: 7 },
+    costs: { accommodation: 95, food: 40, activities: 30, transport: 15 },
+    safety: { overall: 7 },
+    transportation: { walkability: 7 }
+  },
+  {
+    id: "istanbul",
+    name: "Istanbul",
+    country: "Türkiye",
+    region: "Marmara",
+    description: "Where East meets West: grand mosques, bustling bazaars, and sweeping Bosphorus views.",
+    image: "/images/destinations/istanbul.png",
+    rating: 4.8,
+    reviewCount: 178456,
+    poiCount: 3100,
+    categories: ["History", "Mosques", "Bazaars", "Food", "Bosphorus"],
+    budget: "Mid-range",
+    bestTimeToVisit: "April-June, September-October",
+    climate: { avgTemp: 17, rainfall: 60, sunshine: 6 },
+    costs: { accommodation: 85, food: 30, activities: 25, transport: 12 },
+    safety: { overall: 8 },
+    transportation: { walkability: 7 }
+  }
+]
+
 export default function DestinationsPage() {
-  const searchParams = useSearchParams()
-  const q = (searchParams.get('q') || '').toLowerCase().trim()
+  const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [selectedBudget, setSelectedBudget] = useState<string>("all")
   const [sortBy, setSortBy] = useState<string>("rating")
@@ -73,16 +310,8 @@ export default function DestinationsPage() {
     minWalkability: 0
   })
 
-  const filtered = useMemo(() => {
-    if (!q) return DESTINATIONS
-    return DESTINATIONS.filter((d) => {
-      const haystack = `${d.name} ${d.country} ${d.summary} ${(d.tags || []).join(' ')}`.toLowerCase()
-      return haystack.includes(q)
-    })
-  }, [q])
-
   // Get all unique categories
-  const allCategories = Array.from(new Set(filtered.flatMap(dest => dest.categories)))
+  const allCategories = Array.from(new Set(destinations.flatMap(dest => dest.categories)))
 
   // Helper functions for scoring
   const normalizeScore = (value: number, min: number, max: number): number => {
@@ -126,13 +355,13 @@ export default function DestinationsPage() {
   }
 
   // Apply advanced filters
-  const applyAdvancedFilters = (destinations: Destination[]): Destination[] => {
+  const applyAdvancedFilters = (destinationsList: Destination[]): Destination[] => {
     if (Object.values(advancedFilters).every(v => v === 0)) {
-      return destinations
+      return destinationsList
     }
 
-    return destinations.filter(destination => {
-      const scores = calculateCategoryScores(destination, destinations)
+    return destinationsList.filter(destination => {
+      const scores = calculateCategoryScores(destination, destinationsList)
       return (
         scores.rating >= advancedFilters.minRating &&
         scores.safety >= advancedFilters.minSafety &&
@@ -145,11 +374,15 @@ export default function DestinationsPage() {
   }
 
   // Filter destinations
-  const basicFilteredDestinations = filtered.filter(dest => {
+  const basicFilteredDestinations = destinations.filter(dest => {
+    const matchesSearch = dest.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         dest.country.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         dest.description.toLowerCase().includes(searchQuery.toLowerCase())
+    
     const matchesCategory = selectedCategory === "all" || dest.categories.includes(selectedCategory)
     const matchesBudget = selectedBudget === "all" || dest.budget === selectedBudget
 
-    return matchesCategory && matchesBudget
+    return matchesSearch && matchesCategory && matchesBudget
   })
 
   const filteredDestinations = applyAdvancedFilters(basicFilteredDestinations)
@@ -215,24 +448,32 @@ export default function DestinationsPage() {
   const activeFiltersCount = Object.values(advancedFilters).filter(v => v > 0).length
 
   return (
-    <main className="mx-auto w-full max-w-7xl px-4 py-8">
+    <div className="container mx-auto px-4 py-8">
       {/* Header */}
-      <header className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Destinations</h1>
-          <p className="text-sm text-muted-foreground">
-            Discover hand-picked places around the world with real photos.
+          <h1 className="text-4xl font-bold mb-2">Explore Destinations</h1>
+          <p className="text-muted-foreground">
+            Discover amazing places around the world and plan your next adventure
           </p>
         </div>
-        <form role="search" className="w-full max-w-sm sm:w-auto">
-          <Input
-            name="q"
-            defaultValue={q}
-            placeholder="Search destinations..."
-            aria-label="Search destinations"
-          />
-        </form>
-      </header>
+        <div className="flex items-center space-x-4 mt-4 md:mt-0">
+          {selectedForComparison.length > 0 && (
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-muted-foreground">
+                {selectedForComparison.length} selected
+              </span>
+              <DestinationComparison preselectedDestinations={selectedForComparison} />
+            </div>
+          )}
+          <Button asChild>
+            <Link href="/destinations/compare">
+              <Compare className="h-4 w-4 mr-2" />
+              Compare Tool
+            </Link>
+          </Button>
+        </div>
+      </div>
 
       {/* Basic Filters */}
       <Card className="mb-6">
@@ -244,6 +485,18 @@ export default function DestinationsPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="lg:col-span-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search destinations..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
               <SelectTrigger>
                 <SelectValue placeholder="Category" />
@@ -407,7 +660,7 @@ export default function DestinationsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <p className="text-muted-foreground">
-            Showing {sortedDestinations.length} of {DESTINATIONS.length} destinations
+            Showing {sortedDestinations.length} of {destinations.length} destinations
             {filteredDestinations.length < basicFilteredDestinations.length && (
               <span className="text-orange-600 ml-1">
                 ({basicFilteredDestinations.length - filteredDestinations.length} filtered by score requirements)
@@ -429,7 +682,7 @@ export default function DestinationsPage() {
       {/* Destinations Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {sortedDestinations.map((destination) => {
-          const scores = calculateCategoryScores(destination, DESTINATIONS)
+          const scores = calculateCategoryScores(destination, destinations)
           return (
             <Card key={destination.id} className="group hover:shadow-lg transition-shadow">
               <div className="relative">
@@ -542,6 +795,7 @@ export default function DestinationsPage() {
                 Clear Score Filters
               </Button>
               <Button variant="outline" onClick={() => {
+                setSearchQuery("")
                 setSelectedCategory("all")
                 setSelectedBudget("all")
                 resetAdvancedFilters()
@@ -552,6 +806,6 @@ export default function DestinationsPage() {
           </CardContent>
         </Card>
       )}
-    </main>
+    </div>
   )
 }

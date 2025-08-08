@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
-import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, type User } from "firebase/auth"
+import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut, type User } from "firebase/auth"
 import { getFirebaseAuth } from "@/lib/firebase"
 import { getUserProfile, type UserProfile } from "@/lib/user"
 
@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false)
         })
       } catch {
-        // If called on server by accident, keep loading false but no auth
+        // If executed on server accidentally, just stop loading
         setLoading(false)
       }
     })()

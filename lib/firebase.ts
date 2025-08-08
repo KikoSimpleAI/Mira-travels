@@ -1,10 +1,12 @@
-// Centralized Firebase initialization with lazy client-only Auth getter
+// Centralized Firebase initialization with SSR-safe Auth handling
+
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
 import { getFirestore, type Firestore } from "firebase/firestore"
 import { getStorage, type FirebaseStorage } from "firebase/storage"
+import type { Auth } from "firebase/auth"
 
-// IMPORTANT: Do not import from 'firebase/auth' at the module top-level to avoid
-// SSR registration issues. We'll dynamically import it inside getFirebaseAuth().
+// NOTE: Do NOT import from "firebase/auth" at the module top-level.
+// We'll dynamically import it in getFirebaseAuth() to avoid SSR registration issues.
 
 let appInstance: FirebaseApp | undefined
 let dbInstance: Firestore | undefined
@@ -20,8 +22,9 @@ export function getFirebaseApp(): FirebaseApp {
       messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
       appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
     }
+
     if (!config.apiKey || !config.projectId) {
-      console.warn("Firebase config missing required keys. Check NEXT_PUBLIC_FIREBASE_* env vars.")
+      console.warn("Firebase: missing NEXT_PUBLIC_FIREBASE_* environment variables.")
     }
 
     appInstance = getApps().length ? getApps()[0] : initializeApp(config)
@@ -43,23 +46,39 @@ export function getFirebaseStorage(): FirebaseStorage {
   return storageInstance
 }
 
-// Lazy, client-only Auth getter to avoid SSR "Component auth has not been registered yet" errors.
-export async function getFirebaseAuth() {
+// Lazy, client-only Auth getter.
+// Call this in client components before interacting with Auth.
+export async function getFirebaseAuth(): Promise<Auth> {
   if (typeof window === "undefined") {
     throw new Error("getFirebaseAuth() must be called on the client")
   }
-  // Dynamically import to ensure the auth component registers against the same app instance on the client.
-  const { getAuth, setPersistence, browserLocalPersistence, type Auth } = await import("firebase/auth")
-  const auth = getAuth(getFirebaseApp())
-  // Persist session across reloads, ignore failures silently (e.g., in private mode)
+  const { getAuth, setPersistence, browserLocalPersistence } = await import("firebase/auth")
+  const a = getAuth(getFirebaseApp())
   try {
-    await setPersistence(auth, browserLocalPersistence)
+    await setPersistence(a, browserLocalPersistence)
   } catch {
-    // no-op
+    // Ignore persistence errors (e.g., private mode)
   }
-  return auth as Auth
+  // Keep the exported binding updated for compatibility with legacy imports
+  auth = a
+  return a
 }
 
-// Named export 'app' for modules expecting it.
-// Note: This returns the singleton app instance (initializes on first call).
+// Compatibility named export for modules that import { auth }.
+// This will be set on the client after the first call to getFirebaseAuth()
+// and pre-warmed below. On the server it remains undefined.
+export let auth: Auth | undefined
+
+// Named singletons for db and storage as many modules import these
+export const db = getFirestoreDB()
+export const storage = getFirebaseStorage()
+
+// Named export for app to satisfy imports expecting it.
 export const app = getFirebaseApp()
+
+// Pre-warm the Auth singleton on the client so { auth } becomes available soon after import.
+if (typeof window !== "undefined") {
+  // Fire and forget; callers should still prefer getFirebaseAuth() for certainty.
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+  getFirebaseAuth().catch(() => {})
+}

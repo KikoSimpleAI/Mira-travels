@@ -1,7 +1,6 @@
 import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore"
 import { getFirestoreDB } from "@/lib/firebase"
 
-// Core profile type persisted in Firestore at users/{uid}
 export type TravelStyle =
   | "Relaxation"
   | "Adventure"
@@ -9,16 +8,9 @@ export type TravelStyle =
   | "Food & Drink"
   | "Nightlife"
 
-export type BudgetLevel =
-  | "Budget-Friendly"
-  | "Mid-Range"
-  | "Luxury"
+export type BudgetLevel = "Budget-Friendly" | "Mid-Range" | "Luxury"
 
-export type Companions =
-  | "Solo"
-  | "With a Partner"
-  | "With Family"
-  | "With Friends"
+export type Companions = "Solo" | "With a Partner" | "With Family" | "With Friends"
 
 export type CoreInterest =
   | "Beaches & Coastlines"
@@ -44,13 +36,12 @@ export interface UserProfile {
   photoURL?: string | null
   homeBase?: string | null
   bio?: string | null
-  interests?: string[] // legacy/root-level interests if used by UI
+  interests?: string[]
   preferences?: CorePreferences
   createdAt?: unknown
   updatedAt?: unknown
 }
 
-// Fetch a user's profile. Returns null if not found.
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const db = getFirestoreDB()
   const ref = doc(db, "users", uid)
@@ -72,7 +63,6 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   }
 }
 
-// Create or update the whole profile atomically.
 export async function upsertUserProfile(uid: string, patch: Partial<UserProfile>) {
   const db = getFirestoreDB()
   const ref = doc(db, "users", uid)
@@ -91,15 +81,12 @@ export async function upsertUserProfile(uid: string, patch: Partial<UserProfile>
 
 // Smaller helpers specifically for the “core preferences” feature.
 export async function getUserCorePreferences(uid: string): Promise<CorePreferences | null> {
-  const profile = await getUserProfile(uid)
-  return profile?.preferences ?? null
+  const p = await getUserProfile(uid)
+  return p?.preferences ?? null
 }
 
 export async function upsertUserCorePreferences(uid: string, prefs: CorePreferences) {
   const db = getFirestoreDB()
   const ref = doc(db, "users", uid)
-  await updateDoc(ref, {
-    preferences: prefs,
-    updatedAt: serverTimestamp(),
-  })
+  await updateDoc(ref, { preferences: prefs, updatedAt: serverTimestamp() })
 }

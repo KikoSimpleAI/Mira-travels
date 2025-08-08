@@ -1,8 +1,20 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
-import { getAuth, setPersistence, browserLocalPersistence, type Auth } from "firebase/auth"
+import {
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+  type Auth,
+} from "firebase/auth"
+import {
+  getFirestore,
+  initializeFirestore,
+  enableIndexedDbPersistence,
+  type Firestore,
+} from "firebase/firestore"
 
 let app: FirebaseApp | undefined
 let auth: Auth | undefined
+let db: Firestore | undefined
 
 export function getFirebaseApp() {
   if (!app) {
@@ -34,4 +46,36 @@ export function getFirebaseAuth() {
     })
   }
   return auth
+}
+
+/**
+ * Returns a Firestore instance configured for reliability:
+ * - Uses long-polling transport as a fallback (helps in restricted networks)
+ * - Enables IndexedDB persistence (so reads can come from cache when offline)
+ */
+export function getFirebaseDb() {
+  if (!db) {
+    const app = getFirebaseApp()
+
+    // Try initializeFirestore once (throws if already initialized)
+    try {
+      db = initializeFirestore(app, {
+        // Long polling helps in environments where WebSockets are blocked.
+        experimentalForceLongPolling: true,
+        // useFetchStreams can remain default; long polling is the main lever.
+      })
+    } catch {
+      // If it was already initialized by another call, just get the instance.
+      db = getFirestore(app)
+    }
+
+    // Best-effort enable persistence (ignore multi-tab or private mode errors)
+    enableIndexedDbPersistence(db).catch(() => {
+      // Possible errors:
+      // - failed-precondition (multiple tabs open)
+      // - unimplemented (browser doesn't support IndexedDB)
+      // We ignore and continue without persistence.
+    })
+  }
+  return db
 }

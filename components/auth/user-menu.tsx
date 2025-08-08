@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useAuth } from "./auth-provider"
+import { useRouter } from "next/navigation"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -17,6 +18,8 @@ import { LogOut, User, Bookmark, Settings } from 'lucide-react'
 export function UserMenu() {
   const { user, signOutUser } = useAuth()
   const [busy, setBusy] = useState(false)
+  const router = useRouter()
+
   if (!user) return null
 
   const initials =
@@ -41,13 +44,17 @@ export function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="cursor-pointer">
+        <DropdownMenuItem className="cursor-pointer" onClick={() => router.push("/profile")}>
           <User className="h-4 w-4 mr-2" />
           Profile
         </DropdownMenuItem>
         <DropdownMenuItem className="cursor-pointer">
           <Bookmark className="h-4 w-4 mr-2" />
           Saved places
+        </DropdownMenuItem>
+        <DropdownMenuItem className="cursor-pointer" onClick={() => router.push("/preferences")}>
+          <Settings className="h-4 w-4 mr-2" />
+          Preferences
         </DropdownMenuItem>
         <DropdownMenuItem className="cursor-pointer">
           <Settings className="h-4 w-4 mr-2" />

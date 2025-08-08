@@ -1,20 +1,10 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { 
-  User,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  GoogleAuthProvider,
-  signInWithPopup,
-  sendPasswordResetEmail,
-  updateProfile
-} from 'firebase/auth'
-import { auth } from '@/lib/firebase'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { User, Auth } from 'firebase/auth'
+import { getFirebaseAuth } from '@/lib/firebase'
 
-interface AuthContextType {
+type AuthContextType = {
   user: User | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
@@ -30,72 +20,80 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const authRef = useRef<Auth | null>(null)
 
+  // Initialize Auth lazily and subscribe once ready
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user)
-      setLoading(false)
-    })
+    let unsubscribe: (() => void) | undefined
+    let mounted = true
 
-    return unsubscribe
+    ;(async () => {
+      try {
+        const auth = await getFirebaseAuth()
+        if (!mounted) return
+        authRef.current = auth
+        const { onIdTokenChanged } = await import('firebase/auth')
+        unsubscribe = onIdTokenChanged(auth, (u) => {
+          setUser(u)
+          setLoading(false)
+        })
+      } catch (err) {
+        // If auth cannot initialize (e.g., SSR), keep loading false but no user
+        console.warn('Auth init failed:', err)
+        if (mounted) setLoading(false)
+      }
+    })()
+
+    return () => {
+      mounted = false
+      if (unsubscribe) unsubscribe()
+    }
   }, [])
 
   const signIn = async (email: string, password: string) => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password)
-    } catch (error: any) {
-      throw new Error(error.message || 'Failed to sign in')
-    }
+    const auth = authRef.current ?? (await getFirebaseAuth())
+    const { signInWithEmailAndPassword } = await import('firebase/auth')
+    await signInWithEmailAndPassword(auth, email, password)
   }
 
   const signUp = async (email: string, password: string, displayName?: string) => {
-    try {
-      const result = await createUserWithEmailAndPassword(auth, email, password)
-      if (displayName && result.user) {
-        await updateProfile(result.user, { displayName })
-      }
-    } catch (error: any) {
-      throw new Error(error.message || 'Failed to create account')
+    const auth = authRef.current ?? (await getFirebaseAuth())
+    const { createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth')
+    const result = await createUserWithEmailAndPassword(auth, email, password)
+    if (displayName && result.user) {
+      await updateProfile(result.user, { displayName })
     }
   }
 
   const signInWithGoogle = async () => {
-    try {
-      const provider = new GoogleAuthProvider()
-      await signInWithPopup(auth, provider)
-    } catch (error: any) {
-      throw new Error(error.message || 'Failed to sign in with Google')
-    }
+    const auth = authRef.current ?? (await getFirebaseAuth())
+    const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth')
+    const provider = new GoogleAuthProvider()
+    await signInWithPopup(auth, provider)
   }
 
   const logout = async () => {
-    try {
-      await signOut(auth)
-    } catch (error: any) {
-      throw new Error(error.message || 'Failed to sign out')
-    }
+    const auth = authRef.current ?? (await getFirebaseAuth())
+    const { signOut } = await import('firebase/auth')
+    await signOut(auth)
   }
 
   const resetPassword = async (email: string) => {
-    try {
-      await sendPasswordResetEmail(auth, email)
-    } catch (error: any) {
-      throw new Error(error.message || 'Failed to send password reset email')
-    }
+    const auth = authRef.current ?? (await getFirebaseAuth())
+    const { sendPasswordResetEmail } = await import('firebase/auth')
+    await sendPasswordResetEmail(auth, email)
   }
 
   const updateUserProfile = async (displayName: string, photoURL?: string) => {
-    try {
-      if (auth.currentUser) {
-        await updateProfile(auth.currentUser, { displayName, photoURL })
-        setUser({ ...auth.currentUser })
-      }
-    } catch (error: any) {
-      throw new Error(error.message || 'Failed to update profile')
-    }
+    const a = authRef.current ?? (await getFirebaseAuth())
+    if (!a.currentUser) return
+    const { updateProfile } = await import('firebase/auth')
+    await updateProfile(a.currentUser, { displayName, photoURL })
+    // reflect updates immediately in local state
+    setUser({ ...a.currentUser })
   }
 
-  const contextValue: AuthContextType = {
+  const value = useMemo<AuthContextType>(() => ({
     user,
     loading,
     signIn,
@@ -103,22 +101,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithGoogle,
     logout,
     resetPassword,
-    updateUserProfile
-  }
+    updateUserProfile,
+  }), [user, loading])
 
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('useAuth must be used within an AuthProvider')
+  return ctx
 }
-
-// Compatibility re-export so existing imports keep working. from "@/lib/auth-provider"

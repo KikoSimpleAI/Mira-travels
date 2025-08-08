@@ -1,8 +1,10 @@
 // Centralized, production-stable Firebase bootstrap for Next.js App Router.
+//
+// Key points:
 // - Single app instance
-// - Lazy, client-only Auth getter (prevents SSR "Component auth has not been registered yet")
-// - Lazy Firestore/Storage getters (prevents "Service firestore is not available")
-// - Optional compatibility exports for { app }, { db }, { storage }
+// - Lazy, client-only Auth getter to avoid SSR registration issues
+// - Lazy Firestore/Storage getters to avoid "service not available" during import
+// - Optional compatibility exports for { app }, { db }, { storage }, and { auth } (populated after first auth load)
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
 import { getFirestore, type Firestore } from "firebase/firestore"
@@ -43,7 +45,7 @@ export function getFirebaseStorage(): FirebaseStorage {
   return storageInstance
 }
 
-// Lazy, client-only Auth getter to avoid SSR issues
+// Lazy, client-only Auth getter to avoid SSR issues.
 export async function getFirebaseAuth(): Promise<Auth> {
   if (typeof window === "undefined") {
     throw new Error("getFirebaseAuth() must be called on the client")
@@ -53,20 +55,20 @@ export async function getFirebaseAuth(): Promise<Auth> {
   try {
     await setPersistence(a, browserLocalPersistence)
   } catch {
-    // ignore persistence failures (private mode, etc.)
+    // Ignore persistence failures (e.g., private mode)
   }
   authInstance = a
   return a
 }
 
-// Optional compatibility bindings for modules that import these directly.
-// Note: db and storage are exported as lazy proxies to avoid eager initialization at import-time.
+// Optional compatibility bindings.
+// Note: db and storage are exported as lazy proxies so importing them won't eagerly initialize services.
 export const app = getFirebaseApp()
 
 export const db: Firestore = new Proxy({} as Firestore, {
   get(_t, p: keyof Firestore) {
     const real = getFirestoreDB()
-    // @ts-expect-error dynamic
+    // @ts-expect-error dynamic property access
     return real[p]
   },
 }) as Firestore
@@ -74,7 +76,7 @@ export const db: Firestore = new Proxy({} as Firestore, {
 export const storage: FirebaseStorage = new Proxy({} as FirebaseStorage, {
   get(_t, p: keyof FirebaseStorage) {
     const real = getFirebaseStorage()
-    // @ts-expect-error dynamic
+    // @ts-expect-error dynamic property access
     return real[p]
   },
 }) as FirebaseStorage

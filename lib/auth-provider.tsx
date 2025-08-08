@@ -1,11 +1,12 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { onAuthStateChanged, User, signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut } from 'firebase/auth'
-import { auth } from '@/lib/firebase' // Import the initialized auth instance
-import { getUserProfile, type UserProfile } from '@/lib/user'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react"
+import type { ReactNode } from "react"
+import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, type User } from "firebase/auth"
+import { getFirebaseAuth } from "@/lib/firebase"
+import { getUserProfile, type UserProfile } from "@/lib/user"
 
-interface AuthContextType {
+type AuthContextType = {
   user: User | null
   userProfile: UserProfile | null
   loading: boolean
@@ -19,48 +20,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const unsubRef = useRef<() => void>()
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user)
-      if (user) {
-        const profile = await getUserProfile(user.uid)
-        setUserProfile(profile)
-      } else {
-        setUserProfile(null)
+    let mounted = true
+    ;(async () => {
+      try {
+        const auth = await getFirebaseAuth()
+        unsubRef.current = onAuthStateChanged(auth, async (u) => {
+          if (!mounted) return
+          setUser(u)
+          if (u) {
+            try {
+              const profile = await getUserProfile(u.uid)
+              setUserProfile(profile)
+            } catch {
+              setUserProfile(null)
+            }
+          } else {
+            setUserProfile(null)
+          }
+          setLoading(false)
+        })
+      } catch {
+        // If called on server by accident, keep loading false but no auth
+        setLoading(false)
       }
-      setLoading(false)
-    })
-
-    return () => unsubscribe()
+    })()
+    return () => {
+      mounted = false
+      if (unsubRef.current) unsubRef.current()
+    }
   }, [])
 
   const signInWithGoogle = async () => {
+    const auth = await getFirebaseAuth()
     const provider = new GoogleAuthProvider()
-    try {
-      await signInWithPopup(auth, provider)
-    } catch (error) {
-      console.error("Error signing in with Google", error)
-    }
+    await signInWithPopup(auth, provider)
   }
 
   const signOut = async () => {
-    try {
-      await firebaseSignOut(auth)
-    } catch (error)      {
-      console.error("Error signing out", error)
-    }
+    const auth = await getFirebaseAuth()
+    await firebaseSignOut(auth)
   }
 
-  const value = { user, userProfile, loading, signInWithGoogle, signOut }
+  const value = useMemo(
+    () => ({ user, userProfile, loading, signInWithGoogle, signOut }),
+    [user, userProfile, loading]
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider")
+  return ctx
 }

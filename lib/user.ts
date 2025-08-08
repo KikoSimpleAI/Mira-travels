@@ -1,78 +1,105 @@
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
-import { db } from "./firebase";
+import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore"
+import { getFirestoreDB } from "@/lib/firebase"
 
-export interface UserPreferences {
-  travel_style?: 'Relaxation' | 'Adventure' | 'Culture' | 'Food & Drink' | 'Nightlife';
-  budget?: 'Budget-Friendly' | 'Mid-Range' | 'Luxury';
-  companions?: 'Solo' | 'With a Partner' | 'With Family' | 'With Friends';
-  interests?: string[];
+// Core profile type persisted in Firestore at users/{uid}
+export type TravelStyle =
+  | "Relaxation"
+  | "Adventure"
+  | "Culture"
+  | "Food & Drink"
+  | "Nightlife"
+
+export type BudgetLevel =
+  | "Budget-Friendly"
+  | "Mid-Range"
+  | "Luxury"
+
+export type Companions =
+  | "Solo"
+  | "With a Partner"
+  | "With Family"
+  | "With Friends"
+
+export type CoreInterest =
+  | "Beaches & Coastlines"
+  | "Mountains & Hiking"
+  | "Historical Sites"
+  | "Museums & Art"
+  | "Nature & Wildlife"
+  | "Shopping"
+  | "Remote & Quiet"
+
+export interface CorePreferences {
+  travelStyle?: TravelStyle | null
+  budget?: BudgetLevel | null
+  companions?: Companions | null
+  interests?: CoreInterest[]
 }
 
 export interface UserProfile {
-  uid: string;
-  email?: string | null;
-  displayName?: string | null;
-  username?: string;
-  usernameLower?: string;
-  photoURL?: string | null;
-  homeBase?: string;
-  bio?: string;
-  interests?: string[];
-  preferences?: UserPreferences;
-  createdAt?: any;
-  updatedAt?: any;
+  uid: string
+  email?: string | null
+  displayName?: string | null
+  username?: string | null
+  photoURL?: string | null
+  homeBase?: string | null
+  bio?: string | null
+  interests?: string[] // legacy/root-level interests if used by UI
+  preferences?: CorePreferences
+  createdAt?: unknown
+  updatedAt?: unknown
 }
 
-/**
- * Fetches a user's profile from Firestore.
- * @param uid The user's unique ID.
- * @returns The user profile object or null if not found.
- */
+// Fetch a user's profile. Returns null if not found.
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
-  if (!uid) return null;
-  try {
-    const userDocRef = doc(db, "users", uid);
-    const userDocSnap = await getDoc(userDocRef);
-
-    if (userDocSnap.exists()) {
-      return { uid, ...userDocSnap.data() } as UserProfile;
-    } else {
-      console.log("No such document for UID:", uid);
-      return null;
-    }
-  } catch (error) {
-    console.error("Error getting user profile:", error);
-    return null;
+  const db = getFirestoreDB()
+  const ref = doc(db, "users", uid)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return null
+  const data = snap.data() as Partial<UserProfile>
+  return {
+    uid,
+    email: data.email ?? null,
+    displayName: data.displayName ?? null,
+    username: data.username ?? null,
+    photoURL: data.photoURL ?? null,
+    homeBase: data.homeBase ?? null,
+    bio: data.bio ?? null,
+    interests: data.interests ?? [],
+    preferences: data.preferences ?? {},
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
   }
 }
 
-/**
- * Creates or updates a user's profile in Firestore.
- * @param uid The user's unique ID.
- * @param data The profile data to save.
- */
-export async function updateUserProfile(uid: string, data: Partial<UserProfile>): Promise<void> {
-  const userDocRef = doc(db, "users", uid);
-  const profileData = { ...data };
-  if (profileData.username) {
-    profileData.usernameLower = profileData.username.toLowerCase();
-  }
-  
-  await setDoc(userDocRef, { 
-    ...profileData, 
-    updatedAt: serverTimestamp() 
-  }, { merge: true });
+// Create or update the whole profile atomically.
+export async function upsertUserProfile(uid: string, patch: Partial<UserProfile>) {
+  const db = getFirestoreDB()
+  const ref = doc(db, "users", uid)
+  const now = serverTimestamp()
+  await setDoc(
+    ref,
+    {
+      uid,
+      ...patch,
+      updatedAt: now,
+      createdAt: now,
+    },
+    { merge: true }
+  )
 }
 
-/**
- * Checks if a username is already taken.
- * @param username The username to check.
- * @returns True if the username is available, false otherwise.
- */
-export async function isUsernameAvailable(username: string): Promise<boolean> {
-    if (!username) return false;
-    const lowerCaseUsername = username.toLowerCase();
-    const q = query(collection(db, "users"), where("usernameLower", "==", lowerCaseUsername));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.empty;
+// Smaller helpers specifically for the “core preferences” feature.
+export async function getUserCorePreferences(uid: string): Promise<CorePreferences | null> {
+  const profile = await getUserProfile(uid)
+  return profile?.preferences ?? null
+}
+
+export async function upsertUserCorePreferences(uid: string, prefs: CorePreferences) {
+  const db = getFirestoreDB()
+  const ref = doc(db, "users", uid)
+  await updateDoc(ref, {
+    preferences: prefs,
+    updatedAt: serverTimestamp(),
+  })
 }

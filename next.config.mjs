@@ -7,10 +7,14 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    domains: ['images.unsplash.com', 'maps.googleapis.com'],
+    domains: [
+      'maps.googleapis.com',
+      'maps.google.com',
+      'lh3.googleusercontent.com',
+      'places.googleapis.com'
+    ],
     unoptimized: true,
   },
-  serverExternalPackages: ['firebase-admin'],
 }
 
 export default nextConfig

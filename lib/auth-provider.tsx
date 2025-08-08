@@ -1,11 +1,9 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { onAuthStateChanged, User, getAuth, signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut } from 'firebase/auth'
-import { app } from '@/lib/firebase'
-import { getUserProfile, UserProfile } from '@/lib/user'
-
-const auth = getAuth(app)
+import { onAuthStateChanged, User, signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut } from 'firebase/auth'
+import { auth } from '@/lib/firebase' // Import the initialized auth instance
+import { getUserProfile, type UserProfile } from '@/lib/user'
 
 interface AuthContextType {
   user: User | null
@@ -49,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       await firebaseSignOut(auth)
-    } catch (error) {
+    } catch (error)      {
       console.error("Error signing out", error)
     }
   }

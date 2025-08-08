@@ -1,12 +1,13 @@
-// Centralized Firebase initialization with SSR-safe, lazy service getters.
+// Centralized, production-stable Firebase bootstrap for Next.js App Router.
+// - Single app instance
+// - Lazy, client-only Auth getter (prevents SSR "Component auth has not been registered yet")
+// - Lazy Firestore/Storage getters (prevents "Service firestore is not available")
+// - Optional compatibility exports for { app }, { db }, { storage }
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
 import { getFirestore, type Firestore } from "firebase/firestore"
 import { getStorage, type FirebaseStorage } from "firebase/storage"
 import type { Auth } from "firebase/auth"
-
-// IMPORTANT: Do not call getFirestore()/getStorage() during module evaluation.
-// Initialize services lazily so SSR/import doesn't break.
 
 let appInstance: FirebaseApp | undefined
 let firestoreInstance: Firestore | undefined
@@ -30,7 +31,6 @@ export function getFirebaseApp(): FirebaseApp {
 
 export function getFirestoreDB(): Firestore {
   if (!firestoreInstance) {
-    // This registers the Firestore service against the current app when first accessed.
     firestoreInstance = getFirestore(getFirebaseApp())
   }
   return firestoreInstance
@@ -43,7 +43,7 @@ export function getFirebaseStorage(): FirebaseStorage {
   return storageInstance
 }
 
-// Lazy, client-only Auth getter to avoid SSR registration issues.
+// Lazy, client-only Auth getter to avoid SSR issues
 export async function getFirebaseAuth(): Promise<Auth> {
   if (typeof window === "undefined") {
     throw new Error("getFirebaseAuth() must be called on the client")
@@ -53,33 +53,30 @@ export async function getFirebaseAuth(): Promise<Auth> {
   try {
     await setPersistence(a, browserLocalPersistence)
   } catch {
-    // Ignore persistence errors (e.g., private mode)
+    // ignore persistence failures (private mode, etc.)
   }
   authInstance = a
   return a
 }
 
-// Optional compatibility export for modules importing { auth }.
-// Will be undefined until getFirebaseAuth() is called on the client.
-export { authInstance as auth }
+// Optional compatibility bindings for modules that import these directly.
+// Note: db and storage are exported as lazy proxies to avoid eager initialization at import-time.
+export const app = getFirebaseApp()
 
-// Export a lazy proxy so `import { db }` keeps working without eager init.
 export const db: Firestore = new Proxy({} as Firestore, {
-  get(_, prop: keyof Firestore) {
+  get(_t, p: keyof Firestore) {
     const real = getFirestoreDB()
-    // @ts-expect-error - dynamic property access
-    return real[prop]
+    // @ts-expect-error dynamic
+    return real[p]
   },
 }) as Firestore
 
-// Export a lazy proxy for storage as well.
 export const storage: FirebaseStorage = new Proxy({} as FirebaseStorage, {
-  get(_, prop: keyof FirebaseStorage) {
+  get(_t, p: keyof FirebaseStorage) {
     const real = getFirebaseStorage()
-    // @ts-expect-error - dynamic property access
-    return real[prop]
+    // @ts-expect-error dynamic
+    return real[p]
   },
 }) as FirebaseStorage
 
-// Keep a named export for the app for consumers expecting it.
-export const app = getFirebaseApp()
+export { authInstance as auth }

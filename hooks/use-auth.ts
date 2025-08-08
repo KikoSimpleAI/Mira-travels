@@ -120,3 +120,5 @@ export function useAuth() {
   }
   return context
 }
+
+// Compatibility re-export so existing imports keep working. from "@/lib/auth-provider"

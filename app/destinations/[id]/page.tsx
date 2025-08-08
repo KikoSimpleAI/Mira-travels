@@ -5,108 +5,13 @@ import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowLeft, Star, MapPin, Users, Calendar, Clock, Wallet, Shield, Plane, Camera, Map, Heart, Share2 } from 'lucide-react'
+import { getDestinationById } from '@/lib/destinations-data'
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
-
-// Mock destination data
-const destinations = {
-  "paris": {
-    id: "paris",
-    name: "Paris",
-    country: "France",
-    region: "Île-de-France",
-    description: "The City of Light with world-class dining, museums, and romance",
-    longDescription: "Paris, the capital of France, is a major European city and a global center for art, fashion, gastronomy and culture. Its 19th-century cityscape is crisscrossed by wide boulevards and the River Seine. Beyond such landmarks as the Eiffel Tower and the 12th-century, Gothic Notre-Dame cathedral, the city is known for its cafe culture and designer boutiques along the Rue du Faubourg Saint-Honoré.",
-    image: "/placeholder.svg?height=400&width=800&text=Paris+Skyline",
-    images: [
-      "/placeholder.svg?height=300&width=400&text=Eiffel+Tower",
-      "/placeholder.svg?height=300&width=400&text=Louvre+Museum",
-      "/placeholder.svg?height=300&width=400&text=Notre+Dame",
-      "/placeholder.svg?height=300&width=400&text=Champs+Elysees"
-    ],
-    rating: 4.8,
-    reviewCount: 125847,
-    poiCount: 2847,
-    categories: ["Culture", "Art", "Food", "Romance", "History"],
-    coordinates: { lat: 48.8566, lng: 2.3522 },
-    bestTimeToVisit: "April-June, September-October",
-    averageStay: "3-5 days",
-    budget: "Mid-range",
-    highlights: ["Eiffel Tower", "Louvre Museum", "Notre-Dame Cathedral", "Champs-Élysées", "Montmartre"],
-    climate: {
-      avgTemp: 15,
-      rainfall: 50,
-      sunshine: 6,
-      seasons: {
-        spring: "Mild and pleasant, perfect for walking",
-        summer: "Warm with long days, peak tourist season",
-        autumn: "Cool and crisp, fewer crowds",
-        winter: "Cold but charming, Christmas markets"
-      }
-    },
-    costs: {
-      accommodation: 120,
-      food: 45,
-      activities: 35,
-      transport: 15,
-      total: 215
-    },
-    safety: {
-      overall: 8,
-      pettyTheft: "Moderate risk in tourist areas",
-      emergency: "112",
-      tips: ["Watch for pickpockets on metro", "Avoid poorly lit areas at night", "Keep valuables secure"]
-    },
-    transportation: {
-      walkability: 9,
-      publicTransport: "Excellent metro system",
-      airport: "Charles de Gaulle (CDG), Orly (ORY)",
-      gettingAround: "Metro, buses, taxis, walking"
-    },
-    language: {
-      primary: "French",
-      english: "Widely spoken in tourist areas",
-      phrases: ["Bonjour - Hello", "Merci - Thank you", "Excusez-moi - Excuse me"]
-    },
-    visa: "EU citizens: No visa required. Others: Check requirements",
-    currency: "Euro (€)",
-    neighborhoods: [
-      {
-        name: "Le Marais",
-        description: "Historic Jewish quarter with trendy boutiques and cafes",
-        highlights: ["Place des Vosges", "Jewish quarter", "Vintage shopping"]
-      },
-      {
-        name: "Montmartre",
-        description: "Bohemian hilltop district with the Sacré-Cœur Basilica",
-        highlights: ["Sacré-Cœur", "Artists' square", "Moulin Rouge"]
-      },
-      {
-        name: "Saint-Germain",
-        description: "Intellectual hub with bookshops, galleries, and cafes",
-        highlights: ["Café de Flore", "Art galleries", "Luxembourg Gardens"]
-      }
-    ],
-    dayTrips: [
-      {
-        name: "Palace of Versailles",
-        distance: "20km",
-        duration: "Full day",
-        description: "Opulent royal palace with magnificent gardens"
-      },
-      {
-        name: "Giverny",
-        distance: "75km",
-        duration: "Half day",
-        description: "Monet's house and gardens that inspired his water lily paintings"
-      }
-    ]
-  }
-}
 
 interface DestinationPageProps {
   params: {
@@ -118,7 +23,7 @@ export default function DestinationPage({ params }: DestinationPageProps) {
   const [activeTab, setActiveTab] = useState("overview")
   const [isFavorite, setIsFavorite] = useState(false)
   
-  const destination = destinations[params.id as keyof typeof destinations]
+  const destination = getDestinationById(params.id)
   
   if (!destination) {
     notFound()

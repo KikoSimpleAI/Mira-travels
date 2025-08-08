@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider"
 import { Label } from "@/components/ui/label"
 import { DestinationComparison } from "@/components/destination-comparison"
-import { Search, MapPin, Star, Filter, ContrastIcon as Compare, X, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, MapPin, Star, Users, Filter, ContrastIcon as Compare, X, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react'
 import Image from "next/image"
 import Link from "next/link"
 
@@ -54,7 +54,7 @@ interface AdvancedFilters {
   minWalkability: number
 }
 
-// Existing destinations (unchanged except for keeping structure). New destinations appended at the end.
+// Mock destinations data with extended information
 const destinations: Destination[] = [
   {
     id: "paris",
@@ -199,98 +199,6 @@ const destinations: Destination[] = [
     costs: { accommodation: 250, food: 80, activities: 60, transport: 25 },
     safety: { overall: 9 },
     transportation: { walkability: 6 }
-  },
-
-  // NEW: Added destinations with real images.
-  {
-    id: "marrakech",
-    name: "Marrakech",
-    country: "Morocco",
-    region: "Marrakesh-Safi",
-    description: "Vibrant souks, historic medina, and the Koutoubia Mosque at the foot of the Atlas Mountains.",
-    image: "/images/destinations/marrakech.png",
-    rating: 4.6,
-    reviewCount: 56321,
-    poiCount: 980,
-    categories: ["Markets", "Culture", "History", "Food", "Desert"],
-    budget: "Mid-range",
-    bestTimeToVisit: "March-May, September-November",
-    climate: { avgTemp: 22, rainfall: 20, sunshine: 9 },
-    costs: { accommodation: 60, food: 20, activities: 20, transport: 8 },
-    safety: { overall: 7 },
-    transportation: { walkability: 7 }
-  },
-  {
-    id: "positano",
-    name: "Positano",
-    country: "Italy",
-    region: "Campania",
-    description: "Clifftop pastel houses overlooking the Amalfi Coast with chic beaches and coastal paths.",
-    image: "/images/destinations/positano.png",
-    rating: 4.7,
-    reviewCount: 22345,
-    poiCount: 350,
-    categories: ["Beach", "Scenic", "Food", "Romance", "Hiking"],
-    budget: "Luxury",
-    bestTimeToVisit: "May-September",
-    climate: { avgTemp: 23, rainfall: 25, sunshine: 9 },
-    costs: { accommodation: 220, food: 70, activities: 60, transport: 20 },
-    safety: { overall: 8 },
-    transportation: { walkability: 6 }
-  },
-  {
-    id: "portofino",
-    name: "Portofino",
-    country: "Italy",
-    region: "Liguria",
-    description: "Glamorous harbor village with colorful houses, yachts, and lush coastal hills.",
-    image: "/images/destinations/portofino.png",
-    rating: 4.6,
-    reviewCount: 11234,
-    poiCount: 180,
-    categories: ["Harbor", "Scenic", "Food", "Boating", "Romance"],
-    budget: "Luxury",
-    bestTimeToVisit: "May-September",
-    climate: { avgTemp: 22, rainfall: 40, sunshine: 8 },
-    costs: { accommodation: 240, food: 80, activities: 65, transport: 25 },
-    safety: { overall: 9 },
-    transportation: { walkability: 6 }
-  },
-  {
-    id: "marseille",
-    name: "Marseille",
-    country: "France",
-    region: "Provence-Alpes-Côte d'Azur",
-    description: "Historic port city with calanques, fresh seafood, and a vibrant multicultural scene.",
-    image: "/images/destinations/marseille.png",
-    rating: 4.4,
-    reviewCount: 34567,
-    poiCount: 1200,
-    categories: ["Harbor", "Culture", "Food", "Beaches", "History"],
-    budget: "Mid-range",
-    bestTimeToVisit: "April-June, September-October",
-    climate: { avgTemp: 18, rainfall: 45, sunshine: 7 },
-    costs: { accommodation: 95, food: 40, activities: 30, transport: 15 },
-    safety: { overall: 7 },
-    transportation: { walkability: 7 }
-  },
-  {
-    id: "istanbul",
-    name: "Istanbul",
-    country: "Türkiye",
-    region: "Marmara",
-    description: "Where East meets West: grand mosques, bustling bazaars, and sweeping Bosphorus views.",
-    image: "/images/destinations/istanbul.png",
-    rating: 4.8,
-    reviewCount: 178456,
-    poiCount: 3100,
-    categories: ["History", "Mosques", "Bazaars", "Food", "Bosphorus"],
-    budget: "Mid-range",
-    bestTimeToVisit: "April-June, September-October",
-    climate: { avgTemp: 17, rainfall: 60, sunshine: 6 },
-    costs: { accommodation: 85, food: 30, activities: 25, transport: 12 },
-    safety: { overall: 8 },
-    transportation: { walkability: 7 }
   }
 ]
 
@@ -355,13 +263,13 @@ export default function DestinationsPage() {
   }
 
   // Apply advanced filters
-  const applyAdvancedFilters = (destinationsList: Destination[]): Destination[] => {
+  const applyAdvancedFilters = (destinations: Destination[]): Destination[] => {
     if (Object.values(advancedFilters).every(v => v === 0)) {
-      return destinationsList
+      return destinations
     }
 
-    return destinationsList.filter(destination => {
-      const scores = calculateCategoryScores(destination, destinationsList)
+    return destinations.filter(destination => {
+      const scores = calculateCategoryScores(destination, destinations)
       return (
         scores.rating >= advancedFilters.minRating &&
         scores.safety >= advancedFilters.minSafety &&

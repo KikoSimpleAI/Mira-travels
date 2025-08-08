@@ -1,324 +1,422 @@
-"use client"
+'use client'
 
-import { Search, MapPin, Star, Users, Download, Plane } from 'lucide-react'
-import Image from "next/image"
-import Link from "next/link"
+import { useState } from 'react'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { AuthDialog } from '@/components/auth-dialog'
+import { UserMenu } from '@/components/user-menu'
+import { useAuth } from '@/hooks/use-auth'
+import { Search, MapPin, Star, Users, TrendingUp, Globe, Camera, Compass, Heart, Award, Shield, DollarSign, Sun, Activity, Navigation } from 'lucide-react'
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { AuthDialog } from "@/components/auth/auth-dialog"
-import { UserMenu } from "@/components/auth/user-menu"
-import { useAuth } from "@/components/auth/auth-provider"
-import { JoinCommunityDialog } from "@/components/community/join-community-dialog"
-
-const featuredDestinations = [
+const destinations = [
   {
-    id: "paris",
-    name: "Paris, France",
-    image: "/placeholder.svg?height=300&width=400&text=Paris+Eiffel+Tower",
-    description: "The City of Light with world-class dining, museums, and romance",
-    poiCount: 1247,
+    id: 1,
+    name: "Santorini, Greece",
+    image: "/santorini-white-blue.png",
     rating: 4.8,
-    categories: ["Restaurants", "Museums", "Nightlife", "Hotels"]
+    reviews: 2847,
+    category: "Island Paradise",
+    price: "$$$",
+    highlights: ["Stunning sunsets", "White architecture", "Wine tasting"],
+    safety: 9.2,
+    walkability: 7.8,
+    activities: 8.5
   },
   {
-    id: "tokyo",
+    id: 2,
     name: "Tokyo, Japan",
-    image: "/placeholder.svg?height=300&width=400&text=Tokyo+Skyline",
-    description: "Modern metropolis blending tradition with cutting-edge culture",
-    poiCount: 2156,
+    image: "/tokyo-neon-skyline.png",
     rating: 4.9,
-    categories: ["Restaurants", "Sightseeing", "Shopping", "Hotels"]
+    reviews: 3921,
+    category: "Urban Adventure",
+    price: "$$$$",
+    highlights: ["Modern culture", "Amazing food", "Technology"],
+    safety: 9.8,
+    walkability: 9.1,
+    activities: 9.7
   },
   {
-    id: "new-york",
-    name: "New York, USA",
-    image: "/placeholder.svg?height=300&width=400&text=New+York+Manhattan",
-    description: "The city that never sleeps with endless entertainment options",
-    poiCount: 3421,
+    id: 3,
+    name: "Bali, Indonesia",
+    image: "/bali-rice-temple.png",
     rating: 4.7,
-    categories: ["Restaurants", "Museums", "Nightlife", "Broadway"]
+    reviews: 1923,
+    category: "Tropical Escape",
+    price: "$$",
+    highlights: ["Beautiful beaches", "Rich culture", "Affordable luxury"],
+    safety: 8.1,
+    walkability: 6.9,
+    activities: 8.8
   },
   {
-    id: "barcelona",
-    name: "Barcelona, Spain",
-    image: "/placeholder.svg?height=300&width=400&text=Barcelona+Sagrada+Familia",
-    description: "Mediterranean charm with stunning architecture and vibrant culture",
-    poiCount: 892,
+    id: 4,
+    name: "Paris, France",
+    image: "/eiffel-cafe.png",
     rating: 4.6,
-    categories: ["Restaurants", "Architecture", "Beaches", "Nightlife"]
+    reviews: 4156,
+    category: "Cultural Hub",
+    price: "$$$",
+    highlights: ["Art & museums", "Romantic atmosphere", "World-class cuisine"],
+    safety: 8.7,
+    walkability: 8.9,
+    activities: 9.2
+  },
+  {
+    id: 5,
+    name: "Reykjavik, Iceland",
+    image: "/reykjavik-northern-lights-houses.png",
+    rating: 4.5,
+    reviews: 1247,
+    category: "Natural Wonder",
+    price: "$$$$",
+    highlights: ["Northern lights", "Geothermal spas", "Unique landscapes"],
+    safety: 9.6,
+    walkability: 8.3,
+    activities: 7.9
+  },
+  {
+    id: 6,
+    name: "Marrakech, Morocco",
+    image: "/placeholder-4mexv.png",
+    rating: 4.4,
+    reviews: 1834,
+    category: "Exotic Adventure",
+    price: "$",
+    highlights: ["Vibrant markets", "Historic architecture", "Desert excursions"],
+    safety: 7.8,
+    walkability: 7.2,
+    activities: 8.6
   }
 ]
 
-const categories = [
-  { name: "Restaurants", icon: "🍽️", count: "12.5K+" },
-  { name: "Hotels", icon: "🏨", count: "3.2K+" },
-  { name: "Museums", icon: "🏛️", count: "1.8K+" },
-  { name: "Nightlife", icon: "🌃", count: "2.1K+" },
-  { name: "Sightseeing", icon: "📸", count: "4.7K+" },
-  { name: "Transport", icon: "🚇", count: "890+" }
+const features = [
+  {
+    icon: MapPin,
+    title: "Discover Hidden Gems",
+    description: "Find unique destinations and local favorites beyond the typical tourist spots"
+  },
+  {
+    icon: Users,
+    title: "Community Insights",
+    description: "Get real reviews and tips from fellow travelers who've been there"
+  },
+  {
+    icon: TrendingUp,
+    title: "Personalized Recommendations",
+    description: "AI-powered suggestions based on your preferences and travel style"
+  },
+  {
+    icon: Globe,
+    title: "Global Coverage",
+    description: "Explore destinations worldwide with detailed local information"
+  }
 ]
 
 export default function HomePage() {
+  const [searchQuery, setSearchQuery] = useState('')
   const { user, loading } = useAuth()
 
+  const filteredDestinations = destinations.filter(dest =>
+    dest.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    dest.category.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Plane className="h-8 w-8 text-primary" />
-              <h1 className="text-2xl font-bold">Mira Travels</h1>
+      <header className="border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-8">
+              <Link href="/" className="flex items-center space-x-2">
+                <Compass className="h-8 w-8 text-blue-600" />
+                <span className="text-xl font-bold text-gray-900">Mira Travels</span>
+              </Link>
+              <nav className="hidden md:flex space-x-6">
+                <Link href="/destinations" className="text-gray-700 hover:text-blue-600 transition-colors">
+                  Destinations
+                </Link>
+                <Link href="/destinations/compare" className="text-gray-700 hover:text-blue-600 transition-colors">
+                  Compare
+                </Link>
+                <Link href="/poi" className="text-gray-700 hover:text-blue-600 transition-colors">
+                  Places
+                </Link>
+              </nav>
             </div>
-            <nav className="hidden md:flex items-center space-x-6">
-              <Link href="/destinations" className="text-muted-foreground hover:text-foreground">
-                Destinations
-              </Link>
-              <Link href="/itineraries" className="text-muted-foreground hover:text-foreground">
-                Itineraries
-              </Link>
-              <Link href="/travel-tips" className="text-muted-foreground hover:text-foreground">
-                Travel Tips
-              </Link>
-              {user ? (
+            <div className="flex items-center space-x-4">
+              {loading ? (
+                <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse" />
+              ) : user ? (
                 <UserMenu />
               ) : (
-                <>
-                  <AuthDialog variant="outline" />
-                  <JoinCommunityDialog />
-                </>
+                <div className="flex items-center space-x-2">
+                  <AuthDialog defaultMode="signin">
+                    <Button variant="ghost">Sign In</Button>
+                  </AuthDialog>
+                  <AuthDialog defaultMode="signup">
+                    <Button>Join Community</Button>
+                  </AuthDialog>
+                </div>
               )}
-            </nav>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="py-20 bg-gradient-to-br from-primary/10 via-background to-secondary/10">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-4xl md:text-6xl font-bold mb-6">
-            Discover Amazing Places
-          </h2>
-          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Your comprehensive travel guide with local insights, ratings, and personalized itineraries for unforgettable journeys
-          </p>
-          
-          {/* Search Bar */}
-          <div className="max-w-2xl mx-auto mb-12">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
-              <Input 
-                placeholder="Search destinations, restaurants, hotels..." 
-                className="pl-12 py-6 text-lg"
-              />
-              <Button className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                Search
-              </Button>
+      <section className="relative bg-gradient-to-br from-blue-50 via-white to-purple-50 py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
+              Discover Your Next
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
+                {' '}Adventure
+              </span>
+            </h1>
+            <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+              Explore amazing destinations with personalized recommendations, local insights, 
+              and a community of fellow travelers to guide your journey.
+            </p>
+            
+            {/* Search Bar */}
+            <div className="max-w-2xl mx-auto mb-12">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <Input
+                  type="text"
+                  placeholder="Search destinations, cities, or experiences..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-12 pr-4 py-4 text-lg border-2 border-gray-200 focus:border-blue-500 rounded-xl shadow-lg"
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-primary">50K+</div>
-              <div className="text-muted-foreground">Places</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-primary">200+</div>
-              <div className="text-muted-foreground">Cities</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-primary">1M+</div>
-              <div className="text-muted-foreground">Reviews</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-primary">100K+</div>
-              <div className="text-muted-foreground">Travelers</div>
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/destinations">
+                <Button size="lg" className="px-8 py-4 text-lg">
+                  <MapPin className="mr-2 h-5 w-5" />
+                  Explore Destinations
+                </Button>
+              </Link>
+              <Link href="/destinations/compare">
+                <Button variant="outline" size="lg" className="px-8 py-4 text-lg">
+                  <TrendingUp className="mr-2 h-5 w-5" />
+                  Compare Places
+                </Button>
+              </Link>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Categories */}
-      <section className="py-16">
-        <div className="container mx-auto px-4">
-          <h3 className="text-3xl font-bold text-center mb-12">Explore by Category</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-            {categories.map((category) => (
-              <Card key={category.name} className="text-center hover:shadow-lg transition-shadow cursor-pointer">
-                <CardContent className="p-6">
-                  <div className="text-4xl mb-4">{category.icon}</div>
-                  <h4 className="font-semibold mb-2">{category.name}</h4>
-                  <p className="text-sm text-muted-foreground">{category.count}</p>
-                </CardContent>
-              </Card>
+      {/* Features Section */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              Why Choose Mira Travels?
+            </h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              We combine AI-powered recommendations with real traveler insights to help you 
+              find the perfect destination for your next adventure.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {features.map((feature, index) => (
+              <div key={index} className="text-center group">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-200 transition-colors">
+                  <feature.icon className="h-8 w-8 text-blue-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">{feature.title}</h3>
+                <p className="text-gray-600">{feature.description}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Featured Destinations */}
-      <section className="py-16 bg-muted/30">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-12">
-            <h3 className="text-3xl font-bold">Featured Destinations</h3>
-            <Button variant="outline" asChild>
-              <Link href="/destinations">View All Destinations</Link>
-            </Button>
+      {/* Popular Destinations */}
+      <section className="py-20 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center mb-12">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                Popular Destinations
+              </h2>
+              <p className="text-xl text-gray-600">
+                Discover the most loved places by our community
+              </p>
+            </div>
+            <Link href="/destinations">
+              <Button variant="outline" className="hidden sm:flex">
+                View All Destinations
+              </Button>
+            </Link>
           </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredDestinations.map((destination) => (
-              <Card key={destination.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="relative h-48">
-                  <Image
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredDestinations.slice(0, 6).map((destination) => (
+              <Card key={destination.id} className="group hover:shadow-xl transition-all duration-300 overflow-hidden">
+                <div className="relative">
+                  <img
                     src={destination.image || "/placeholder.svg"}
                     alt={destination.name}
-                    fill
-                    className="object-cover"
+                    className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
                   />
-                  <div className="absolute top-4 right-4">
-                    <Badge className="bg-background/90 text-foreground">
-                      <Star className="h-3 w-3 mr-1 fill-current" />
-                      {destination.rating}
+                  <div className="absolute top-4 left-4">
+                    <Badge variant="secondary" className="bg-white/90 text-gray-900">
+                      {destination.category}
                     </Badge>
                   </div>
+                  <div className="absolute top-4 right-4">
+                    <div className="bg-white/90 rounded-full p-2">
+                      <Heart className="h-4 w-4 text-gray-600 hover:text-red-500 cursor-pointer transition-colors" />
+                    </div>
+                  </div>
                 </div>
-                <CardContent className="p-6">
-                  <h4 className="font-bold text-lg mb-2">{destination.name}</h4>
-                  <p className="text-muted-foreground text-sm mb-4">{destination.description}</p>
-                  
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4 mr-1" />
-                      {destination.poiCount} places
-                    </div>
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <Users className="h-4 w-4 mr-1" />
-                      Popular
+                
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <CardTitle className="text-xl group-hover:text-blue-600 transition-colors">
+                      {destination.name}
+                    </CardTitle>
+                    <div className="text-right">
+                      <div className="flex items-center gap-1">
+                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                        <span className="font-semibold">{destination.rating}</span>
+                      </div>
+                      <p className="text-sm text-gray-500">{destination.reviews} reviews</p>
                     </div>
                   </div>
-                  
-                  <div className="flex flex-wrap gap-1 mb-4">
-                    {destination.categories.slice(0, 3).map((category) => (
-                      <Badge key={category} variant="secondary" className="text-xs">
-                        {category}
-                      </Badge>
-                    ))}
+                </CardHeader>
+                
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      {destination.highlights.map((highlight, index) => (
+                        <Badge key={index} variant="outline" className="text-xs">
+                          {highlight}
+                        </Badge>
+                      ))}
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div className="flex items-center gap-1">
+                        <Shield className="h-4 w-4 text-green-600" />
+                        <span className="font-medium">{destination.safety}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Navigation className="h-4 w-4 text-blue-600" />
+                        <span className="font-medium">{destination.walkability}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Activity className="h-4 w-4 text-purple-600" />
+                        <span className="font-medium">{destination.activities}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="text-lg font-bold text-gray-900">{destination.price}</span>
+                      <Link href={`/destinations/${destination.id}`}>
+                        <Button size="sm">
+                          View Details
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
-                  
-                  <Button className="w-full" asChild>
-                    <Link href={`/destination/${destination.id}`}>
-                      Explore {destination.name}
-                    </Link>
-                  </Button>
                 </CardContent>
               </Card>
             ))}
           </div>
+
+          <div className="text-center mt-12 sm:hidden">
+            <Link href="/destinations">
+              <Button variant="outline">
+                View All Destinations
+              </Button>
+            </Link>
+          </div>
         </div>
       </section>
 
-      {/* Features */}
-      <section className="py-16">
-        <div className="container mx-auto px-4">
-          <h3 className="text-3xl font-bold text-center mb-12">Why Choose Mira Travels?</h3>
-          <div className="grid md:grid-cols-3 gap-8">
-            <Card className="text-center">
-              <CardHeader>
-                <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                  <MapPin className="h-6 w-6 text-primary" />
-                </div>
-                <CardTitle>Interactive Maps</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  Explore destinations with detailed Google Maps integration, showing all points of interest with ratings and reviews.
-                </CardDescription>
-              </CardContent>
-            </Card>
-
-            <Card className="text-center">
-              <CardHeader>
-                <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                  <Download className="h-6 w-6 text-primary" />
-                </div>
-                <CardTitle>PDF Itineraries</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  Create and download personalized travel itineraries in PDF format, perfect for offline access during your trips.
-                </CardDescription>
-              </CardContent>
-            </Card>
-
-            <Card className="text-center">
-              <CardHeader>
-                <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                  <Users className="h-6 w-6 text-primary" />
-                </div>
-                <CardTitle>Community Reviews</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  Read authentic reviews from fellow travelers and share your own experiences to help others discover amazing places.
-                </CardDescription>
-              </CardContent>
-            </Card>
-          </div>
+      {/* CTA Section */}
+      <section className="py-20 bg-gradient-to-r from-blue-600 to-purple-600">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+            Ready to Start Your Journey?
+          </h2>
+          <p className="text-xl text-blue-100 mb-8">
+            Join thousands of travelers who trust Mira Travels to discover their perfect destinations.
+          </p>
+          
+          {user ? (
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/profile">
+                <Button size="lg" variant="secondary" className="px-8 py-4">
+                  <Users className="mr-2 h-5 w-5" />
+                  Customize Your Profile
+                </Button>
+              </Link>
+              <Link href="/destinations/compare">
+                <Button size="lg" variant="outline" className="px-8 py-4 text-white border-white hover:bg-white hover:text-blue-600">
+                  <TrendingUp className="mr-2 h-5 w-5" />
+                  Compare Destinations
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <AuthDialog defaultMode="signup">
+              <Button size="lg" variant="secondary" className="px-8 py-4">
+                <Users className="mr-2 h-5 w-5" />
+                Join the Community
+              </Button>
+            </AuthDialog>
+          )}
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-muted py-12">
-        <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
+      <footer className="bg-gray-900 text-white py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div className="col-span-1 md:col-span-2">
               <div className="flex items-center space-x-2 mb-4">
-                <Plane className="h-6 w-6 text-primary" />
-                <span className="text-lg font-bold">Mira Travels</span>
+                <Compass className="h-8 w-8 text-blue-400" />
+                <span className="text-xl font-bold">Mira Travels</span>
               </div>
-              <p className="text-muted-foreground">
-                Your comprehensive travel companion for discovering amazing places around the world.
+              <p className="text-gray-400 mb-4">
+                Your trusted companion for discovering amazing destinations around the world. 
+                Get personalized recommendations and connect with fellow travelers.
               </p>
             </div>
             
             <div>
-              <h4 className="font-semibold mb-4">Destinations</h4>
-              <ul className="space-y-2 text-muted-foreground">
-                <li><Link href="/destination/paris">Paris</Link></li>
-                <li><Link href="/destination/tokyo">Tokyo</Link></li>
-                <li><Link href="/destination/new-york">New York</Link></li>
-                <li><Link href="/destination/barcelona">Barcelona</Link></li>
+              <h3 className="text-lg font-semibold mb-4">Explore</h3>
+              <ul className="space-y-2 text-gray-400">
+                <li><Link href="/destinations" className="hover:text-white transition-colors">Destinations</Link></li>
+                <li><Link href="/destinations/compare" className="hover:text-white transition-colors">Compare</Link></li>
+                <li><Link href="/poi" className="hover:text-white transition-colors">Places of Interest</Link></li>
               </ul>
             </div>
             
             <div>
-              <h4 className="font-semibold mb-4">Categories</h4>
-              <ul className="space-y-2 text-muted-foreground">
-                <li><Link href="/restaurants">Restaurants</Link></li>
-                <li><Link href="/hotels">Hotels</Link></li>
-                <li><Link href="/attractions">Attractions</Link></li>
-                <li><Link href="/nightlife">Nightlife</Link></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-4">Support</h4>
-              <ul className="space-y-2 text-muted-foreground">
-                <li><Link href="/help">Help Center</Link></li>
-                <li><Link href="/contact">Contact Us</Link></li>
-                <li><Link href="/privacy">Privacy Policy</Link></li>
-                <li><Link href="/terms">Terms of Service</Link></li>
+              <h3 className="text-lg font-semibold mb-4">Community</h3>
+              <ul className="space-y-2 text-gray-400">
+                <li><Link href="/profile" className="hover:text-white transition-colors">My Profile</Link></li>
+                <li><a href="#" className="hover:text-white transition-colors">Travel Stories</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Help & Support</a></li>
               </ul>
             </div>
           </div>
           
-          <div className="border-t mt-8 pt-8 text-center text-muted-foreground">
+          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
             <p>&copy; 2024 Mira Travels. All rights reserved.</p>
           </div>
         </div>

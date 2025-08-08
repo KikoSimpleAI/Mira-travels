@@ -1,16 +1,17 @@
-// Centralized Firebase initialization with SSR-safe Auth handling
+// Centralized Firebase initialization with SSR-safe, lazy service getters.
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
 import { getFirestore, type Firestore } from "firebase/firestore"
 import { getStorage, type FirebaseStorage } from "firebase/storage"
 import type { Auth } from "firebase/auth"
 
-// NOTE: Do NOT import from "firebase/auth" at the module top-level.
-// We'll dynamically import it in getFirebaseAuth() to avoid SSR registration issues.
+// IMPORTANT: Do not call getFirestore()/getStorage() during module evaluation.
+// Initialize services lazily so SSR/import doesn't break.
 
 let appInstance: FirebaseApp | undefined
-let dbInstance: Firestore | undefined
+let firestoreInstance: Firestore | undefined
 let storageInstance: FirebaseStorage | undefined
+let authInstance: Auth | undefined
 
 export function getFirebaseApp(): FirebaseApp {
   if (!appInstance) {
@@ -22,21 +23,17 @@ export function getFirebaseApp(): FirebaseApp {
       messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
       appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
     }
-
-    if (!config.apiKey || !config.projectId) {
-      console.warn("Firebase: missing NEXT_PUBLIC_FIREBASE_* environment variables.")
-    }
-
     appInstance = getApps().length ? getApps()[0] : initializeApp(config)
   }
   return appInstance
 }
 
 export function getFirestoreDB(): Firestore {
-  if (!dbInstance) {
-    dbInstance = getFirestore(getFirebaseApp())
+  if (!firestoreInstance) {
+    // This registers the Firestore service against the current app when first accessed.
+    firestoreInstance = getFirestore(getFirebaseApp())
   }
-  return dbInstance
+  return firestoreInstance
 }
 
 export function getFirebaseStorage(): FirebaseStorage {
@@ -46,8 +43,7 @@ export function getFirebaseStorage(): FirebaseStorage {
   return storageInstance
 }
 
-// Lazy, client-only Auth getter.
-// Call this in client components before interacting with Auth.
+// Lazy, client-only Auth getter to avoid SSR registration issues.
 export async function getFirebaseAuth(): Promise<Auth> {
   if (typeof window === "undefined") {
     throw new Error("getFirebaseAuth() must be called on the client")
@@ -59,26 +55,31 @@ export async function getFirebaseAuth(): Promise<Auth> {
   } catch {
     // Ignore persistence errors (e.g., private mode)
   }
-  // Keep the exported binding updated for compatibility with legacy imports
-  auth = a
+  authInstance = a
   return a
 }
 
-// Compatibility named export for modules that import { auth }.
-// This will be set on the client after the first call to getFirebaseAuth()
-// and pre-warmed below. On the server it remains undefined.
-export let auth: Auth | undefined
+// Optional compatibility export for modules importing { auth }.
+// Will be undefined until getFirebaseAuth() is called on the client.
+export { authInstance as auth }
 
-// Named singletons for db and storage as many modules import these
-export const db = getFirestoreDB()
-export const storage = getFirebaseStorage()
+// Export a lazy proxy so `import { db }` keeps working without eager init.
+export const db: Firestore = new Proxy({} as Firestore, {
+  get(_, prop: keyof Firestore) {
+    const real = getFirestoreDB()
+    // @ts-expect-error - dynamic property access
+    return real[prop]
+  },
+}) as Firestore
 
-// Named export for app to satisfy imports expecting it.
+// Export a lazy proxy for storage as well.
+export const storage: FirebaseStorage = new Proxy({} as FirebaseStorage, {
+  get(_, prop: keyof FirebaseStorage) {
+    const real = getFirebaseStorage()
+    // @ts-expect-error - dynamic property access
+    return real[prop]
+  },
+}) as FirebaseStorage
+
+// Keep a named export for the app for consumers expecting it.
 export const app = getFirebaseApp()
-
-// Pre-warm the Auth singleton on the client so { auth } becomes available soon after import.
-if (typeof window !== "undefined") {
-  // Fire and forget; callers should still prefer getFirebaseAuth() for certainty.
-  // eslint-disable-next-line @typescript-eslint/no-floating-promises
-  getFirebaseAuth().catch(() => {})
-}

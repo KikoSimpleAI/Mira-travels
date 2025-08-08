@@ -1,16 +1,15 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import { AuthDialog } from '@/components/auth-dialog'
+import { useAuth } from '@/lib/auth-provider'
 import { UserMenu } from '@/components/user-menu'
-import { useAuth } from '@/hooks/use-auth'
-import { Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export function HeaderAuth() {
-  const { user, loading } = useAuth()
+  const { user, loading, signInWithGoogle } = useAuth()
 
   if (loading) {
-    return <Loader2 className="h-4 w-4 animate-spin" />
+    return <Skeleton className="h-10 w-24" />
   }
 
   if (user) {
@@ -18,13 +17,8 @@ export function HeaderAuth() {
   }
 
   return (
-    <div className="flex items-center space-x-2">
-      <AuthDialog defaultMode="signin">
-        <Button variant="ghost" className="hidden sm:inline-flex">Sign In</Button>
-      </AuthDialog>
-      <AuthDialog defaultMode="signup">
-        <Button className="text-sm px-3 py-2">Join Community</Button>
-      </AuthDialog>
-    </div>
+    <Button onClick={signInWithGoogle}>
+      Sign In
+    </Button>
   )
 }

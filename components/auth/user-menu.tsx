@@ -52,14 +52,6 @@ export function UserMenu() {
           <Bookmark className="h-4 w-4 mr-2" />
           Saved places
         </DropdownMenuItem>
-        <DropdownMenuItem className="cursor-pointer" onClick={() => router.push("/preferences")}>
-          <Settings className="h-4 w-4 mr-2" />
-          Preferences
-        </DropdownMenuItem>
-        <DropdownMenuItem className="cursor-pointer">
-          <Settings className="h-4 w-4 mr-2" />
-          Settings
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-red-600 cursor-pointer"

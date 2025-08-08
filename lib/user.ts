@@ -11,29 +11,6 @@ import {
 } from "firebase/firestore"
 import { getFirebaseApp } from "./firebase"
 
-/**
- * Existing profile shape
- */
-export type UserProfile = {
-  uid: string
-  displayName: string
-  username: string
-  usernameLower: string
-  photoURL?: string
-  email?: string
-  homeBase?: string
-  bio?: string
-  // Existing interests from Join Community (keep for compatibility)
-  interests?: string[]
-  // NEW: Core travel preferences stored under the user document
-  preferences?: UserCorePreferences
-  createdAt?: any
-  updatedAt?: any
-}
-
-/**
- * New: Canonical enums and labels for core preferences
- */
 export type TravelStyle = "relaxation" | "adventure" | "culture" | "food_drink" | "nightlife"
 export const TRAVEL_STYLE_OPTIONS: { value: TravelStyle; label: string; example: string }[] = [
   { value: "relaxation", label: "Relaxation", example: "beaches, spas, quiet countryside" },
@@ -58,7 +35,6 @@ export const COMPANION_OPTIONS: { value: Companions; label: string }[] = [
   { value: "friends", label: "With Friends" },
 ]
 
-// Key interests/must-haves
 export const KEY_INTERESTS: string[] = [
   "Beaches & Coastlines",
   "Mountains & Hiking",
@@ -73,7 +49,22 @@ export type UserCorePreferences = {
   travelStyle: TravelStyle
   budget: BudgetLevel
   companions: Companions
-  interests: string[] // multi-select from KEY_INTERESTS
+  interests: string[]
+}
+
+export type UserProfile = {
+  uid: string
+  displayName: string
+  username: string
+  usernameLower: string
+  photoURL?: string
+  email?: string
+  homeBase?: string
+  bio?: string
+  interests?: string[]
+  preferences?: UserCorePreferences
+  createdAt?: any
+  updatedAt?: any
 }
 
 export function usernameFromDisplayName(input?: string, fallback?: string) {
@@ -114,33 +105,6 @@ export async function upsertUserProfile(profile: UserProfile): Promise<void> {
       usernameLower: profile.username.toLowerCase(),
       updatedAt: serverTimestamp(),
       createdAt: profile.createdAt || serverTimestamp(),
-    },
-    { merge: true }
-  )
-}
-
-/**
- * New helpers: read and write the core preferences at users/{uid}.preferences
- */
-export async function getUserCorePreferences(uid: string): Promise<UserCorePreferences | null> {
-  const profile = await getUserProfile(uid)
-  return profile?.preferences || null
-}
-
-export async function upsertUserCorePreferences(uid: string, prefs: UserCorePreferences): Promise<void> {
-  const app = getFirebaseApp()
-  const db = getFirestore(app)
-  const ref = doc(db, "users", uid)
-  await setDoc(
-    ref,
-    {
-      preferences: {
-        travelStyle: prefs.travelStyle,
-        budget: prefs.budget,
-        companions: prefs.companions,
-        interests: Array.from(new Set(prefs.interests)).filter((x) => KEY_INTERESTS.includes(x)),
-      },
-      updatedAt: serverTimestamp(),
     },
     { merge: true }
   )

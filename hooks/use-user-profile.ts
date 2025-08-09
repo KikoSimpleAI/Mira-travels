@@ -24,7 +24,7 @@ export interface UserProfile {
   createdAt: string
 }
 
-function defaultProfileFor(user: { displayName: string | null; email: string | null }): UserProfile {
+function defaultsFor(user: { displayName: string | null; email: string | null }): UserProfile {
   return {
     name: user.displayName || "User",
     email: user.email || "",
@@ -48,7 +48,7 @@ function defaultProfileFor(user: { displayName: string | null; email: string | n
 export function useUserProfile() {
   const { user } = useAuth()
   const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const [isOffline, setIsOffline] = useState<boolean>(false)
 
@@ -61,25 +61,24 @@ export function useUserProfile() {
 
     setLoading(true)
     setError(null)
-
     const ref = doc(db, "users", user.uid)
 
-    // Try network first
+    // 1) Try network first
     try {
-      const snapshot = await getDoc(ref)
-      if (snapshot.exists()) {
-        setProfile(snapshot.data() as UserProfile)
+      const snap = await getDoc(ref)
+      if (snap.exists()) {
+        setProfile(snap.data() as UserProfile)
         setIsOffline(false)
         return
       }
-      // Create a default profile if not present (works offline as queued write)
-      const defaults = defaultProfileFor({ displayName: user.displayName, email: user.email })
+      // Not found: create a default profile (works offline too due to local cache)
+      const defaults = defaultsFor({ displayName: user.displayName, email: user.email })
       await setDoc(ref, defaults, { merge: true })
       setProfile(defaults)
       setIsOffline(false)
       return
-    } catch (e) {
-      // Network failure — fall back to cache
+    } catch {
+      // 2) Network failed — fall back to cache
       try {
         const cached = await getDocFromCache(ref)
         if (cached.exists()) {
@@ -88,9 +87,9 @@ export function useUserProfile() {
           return
         }
       } catch {
-        // no cached data either
+        // No cache either
       }
-      setError("Failed to load profile (offline and no cached data).")
+      setError("Offline and no cached profile available.")
       setIsOffline(true)
     } finally {
       setLoading(false)
@@ -106,18 +105,18 @@ export function useUserProfile() {
     void loadProfile()
   }, [user, loadProfile])
 
-  // Resilient update that works offline (queued writes)
+  // Writes use setDoc({ merge: true }) so they queue when offline and sync later
   const updateProfile = useCallback(
     async (updates: Partial<UserProfile>) => {
       if (!user) return false
       try {
         const ref = doc(db, "users", user.uid)
-        await setDoc(ref, updates, { merge: true }) // setDoc with merge queues writes offline too
+        await setDoc(ref, updates, { merge: true })
         setProfile((prev) => (prev ? { ...prev, ...updates } : (updates as UserProfile)))
         setError(null)
         return true
-      } catch (e) {
-        setError("Failed to update profile")
+      } catch {
+        setError("Failed to update profile.")
         return false
       }
     },
@@ -125,9 +124,7 @@ export function useUserProfile() {
   )
 
   const updatePreferences = useCallback(
-    async (preferences: UserProfile["preferences"]) => {
-      return updateProfile({ preferences })
-    },
+    async (preferences: UserProfile["preferences"]) => updateProfile({ preferences }),
     [updateProfile],
   )
 

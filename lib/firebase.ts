@@ -1,21 +1,20 @@
 // Robust Firebase bootstrap for Next.js App Router
 // - Single app instance
-// - Firestore with persistent local cache and long-polling fallback on the client
+// - Firestore with persistent local cache + long-polling fallback on the client
 // - Client-only persistence for Auth
-// - Exposes { app, auth, db } and avoids eager multi-initialization
+// - Exposes { app, auth, db } without eager multi-initialization
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
 import {
   getFirestore,
   initializeFirestore,
   type Firestore,
-  // Persistent cache (available in Firestore Web v10+)
   persistentLocalCache,
   persistentMultipleTabManager,
 } from "firebase/firestore"
 import { getAuth, setPersistence, browserLocalPersistence, type Auth } from "firebase/auth"
 
-// Client-safe config (Firebase SDK expects public keys on the client)
+// Client-safe config expected by Firebase Web SDK
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -28,35 +27,35 @@ const firebaseConfig = {
 // Singleton app
 export const app: FirebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
 
-// Auth singleton
+// Auth singleton (persistence only on client)
 export const auth: Auth = getAuth(app)
 if (typeof window !== "undefined") {
-  // Persist session across reloads; ignore environments that block persistence (e.g., private mode)
-  setPersistence(auth, browserLocalPersistence).catch(() => {})
+  setPersistence(auth, browserLocalPersistence).catch(() => {
+    // Ignore persistence failures (e.g. private mode)
+  })
 }
 
 // Firestore singleton with resilient client initialization
 let _db: Firestore | null = null
 
 function createFirestore(): Firestore {
-  // On the client, prefer initializeFirestore to configure cache and transport.
   if (typeof window !== "undefined") {
     try {
+      // Use initializeFirestore so we can configure cache and transport
       return initializeFirestore(app, {
         ignoreUndefinedProperties: true,
-        // Persist data across reloads and multi-tabs; falls back automatically when IndexedDB is unavailable
         localCache: persistentLocalCache({
           tabManager: persistentMultipleTabManager(),
         }),
-        // Helps in restricted networks (VPN, corporate, some previews)
+        // Helps behind VPNs / corporate networks / preview environments
         experimentalAutoDetectLongPolling: true,
       })
     } catch {
-      // If already initialized, just return the default
+      // If already initialized, just return default
       return getFirestore(app)
     }
   }
-  // On server/SSR (rarely used for client SDK operations), return default
+  // On server: return default instance (client SDK is rarely used server-side)
   return getFirestore(app)
 }
 

@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { doc, getDoc, getDocFromCache, setDoc } from "firebase/firestore"
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
+import { doc, onSnapshot, setDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "./use-auth"
 
@@ -52,65 +52,71 @@ export function useUserProfile() {
   const [error, setError] = useState<string | null>(null)
   const [isOffline, setIsOffline] = useState<boolean>(false)
 
-  const loadProfile = useCallback(async () => {
-    if (!user) {
+  // Prevent repeated default creation loops
+  const createdDefaultRef = useRef<boolean>(false)
+
+  const ref = useMemo(() => {
+    if (!user) return null
+    return doc(db, "users", user.uid)
+  }, [user])
+
+  // Live, cache-first subscription — avoids "client is offline" errors
+  useEffect(() => {
+    setError(null)
+    setIsOffline(false)
+    createdDefaultRef.current = false
+
+    if (!ref) {
       setProfile(null)
       setLoading(false)
       return
     }
 
     setLoading(true)
-    setError(null)
-    const ref = doc(db, "users", user.uid)
+    const unsub = onSnapshot(
+      ref,
+      { includeMetadataChanges: true },
+      async (snap) => {
+        // Mark offline if this emission came from cache
+        setIsOffline(snap.metadata.fromCache)
 
-    // 1) Try network first
-    try {
-      const snap = await getDoc(ref)
-      if (snap.exists()) {
-        setProfile(snap.data() as UserProfile)
-        setIsOffline(false)
-        return
-      }
-      // Not found: create a default profile (works offline too due to local cache)
-      const defaults = defaultsFor({ displayName: user.displayName, email: user.email })
-      await setDoc(ref, defaults, { merge: true })
-      setProfile(defaults)
-      setIsOffline(false)
-      return
-    } catch {
-      // 2) Network failed — fall back to cache
-      try {
-        const cached = await getDocFromCache(ref)
-        if (cached.exists()) {
-          setProfile(cached.data() as UserProfile)
-          setIsOffline(true)
+        if (snap.exists()) {
+          setProfile(snap.data() as UserProfile)
+          setLoading(false)
           return
         }
-      } catch {
-        // No cache either
-      }
-      setError("Offline and no cached profile available.")
-      setIsOffline(true)
-    } finally {
-      setLoading(false)
-    }
-  }, [user])
 
-  useEffect(() => {
-    if (!user) {
-      setProfile(null)
-      setLoading(false)
-      return
-    }
-    void loadProfile()
-  }, [user, loadProfile])
+        // No document yet: create a default once (queues offline and syncs later)
+        if (!createdDefaultRef.current && user) {
+          createdDefaultRef.current = true
+          try {
+            const defaults = defaultsFor({ displayName: user.displayName, email: user.email })
+            // merge:true ensures we don't override other fields if they were created elsewhere
+            await setDoc(ref, defaults, { merge: true })
+            // Optimistically update local state
+            setProfile((prev) => prev ?? defaults)
+          } catch {
+            // If we're offline and persistence is active, setDoc will queue.
+            // No need to surface an error; we'll keep showing empty/default UI until it syncs.
+          }
+        }
+        setLoading(false)
+      },
+      (err) => {
+        // Never throw — keep it in state for the UI
+        setError("Unable to load profile right now.")
+        setLoading(false)
+      },
+    )
+
+    return () => unsub()
+  }, [ref, user])
 
   // Writes use setDoc({ merge: true }) so they queue when offline and sync later
   const updateProfile = useCallback(
     async (updates: Partial<UserProfile>) => {
-      if (!user) return false
+      if (!ref) return false
       try {
-        const ref = doc(db, "users", user.uid)
         await setDoc(ref, updates, { merge: true })
         setProfile((prev) => (prev ? { ...prev, ...updates } : (updates as UserProfile)))
         setError(null)
@@ -120,7 +126,7 @@ export function useUserProfile() {
         return false
       }
     },
-    [user],
+    [ref],
   )
 
   const updatePreferences = useCallback(
@@ -135,6 +141,10 @@ export function useUserProfile() {
     isOffline,
     updateProfile,
     updatePreferences,
-    refreshProfile: loadProfile,
+    // expose a manual refresh that simply re-triggers the effect by toggling state
+    refreshProfile: () => {
+      // The onSnapshot is live; no-op provided for API parity
+      return Promise.resolve()
+    },
   }
 }

@@ -1,8 +1,9 @@
-// Robust Firebase bootstrap for Next.js App Router
+// Robust Firebase bootstrap for Next.js App Router (client-first usage)
 // - Single app instance
-// - Firestore with persistent local cache + long-polling fallback on the client
+// - Firestore with persistent local cache + multi-tab coordination
+// - Automatic long-polling fallback for constrained networks
 // - Client-only persistence for Auth
-// - Exposes { app, auth, db } without eager multi-initialization
+// - Exposes { app, auth, db }
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
 import {
@@ -31,31 +32,32 @@ export const app: FirebaseApp = getApps().length ? getApps()[0] : initializeApp(
 export const auth: Auth = getAuth(app)
 if (typeof window !== "undefined") {
   setPersistence(auth, browserLocalPersistence).catch(() => {
-    // Ignore persistence failures (e.g. private mode)
+    // Ignore persistence failures (e.g., Safari Private, embedded contexts)
   })
 }
 
-// Firestore singleton with resilient client initialization
+// Firestore singleton with resilient client configuration
 let _db: Firestore | null = null
 
 function createFirestore(): Firestore {
   if (typeof window !== "undefined") {
     try {
-      // Use initializeFirestore so we can configure cache and transport
+      // Use initializeFirestore to configure cache + transport behavior
+      // Note: experimentalAutoDetectLongPolling is supported in modern SDKs.
+      // If not, it will be ignored at runtime.
       return initializeFirestore(app, {
         ignoreUndefinedProperties: true,
         localCache: persistentLocalCache({
           tabManager: persistentMultipleTabManager(),
         }),
-        // Helps behind VPNs / corporate networks / preview environments
         experimentalAutoDetectLongPolling: true,
       })
     } catch {
-      // If already initialized, just return default
+      // Already initialized (e.g., Fast Refresh) — return existing instance
       return getFirestore(app)
     }
   }
-  // On server: return default instance (client SDK is rarely used server-side)
+  // On server (rarely used for web client SDK), return default
   return getFirestore(app)
 }
 

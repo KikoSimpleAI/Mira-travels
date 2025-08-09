@@ -91,18 +91,15 @@ export function useUserProfile() {
           createdDefaultRef.current = true
           try {
             const defaults = defaultsFor({ displayName: user.displayName, email: user.email })
-            // merge:true ensures we don't override other fields if they were created elsewhere
             await setDoc(ref, defaults, { merge: true })
-            // Optimistically update local state
             setProfile((prev) => prev ?? defaults)
           } catch {
-            // If we're offline and persistence is active, setDoc will queue.
-            // No need to surface an error; we'll keep showing empty/default UI until it syncs.
+            // If offline and persistence is active, setDoc will queue.
           }
         }
         setLoading(false)
       },
-      (err) => {
+      () => {
         // Never throw — keep it in state for the UI
         setError("Unable to load profile right now.")
         setLoading(false)
@@ -141,10 +138,6 @@ export function useUserProfile() {
     isOffline,
     updateProfile,
     updatePreferences,
-    // expose a manual refresh that simply re-triggers the effect by toggling state
-    refreshProfile: () => {
-      // The onSnapshot is live; no-op provided for API parity
-      return Promise.resolve()
-    },
+    refreshProfile: () => Promise.resolve(), // live subscription auto-updates
   }
 }

@@ -1,5 +1,5 @@
-@import 'tailwindcss';
-@import 'tw-animate-css';
+@import "tailwindcss";
+@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -121,3 +121,6 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* If this file is imported anywhere, it will still bring in Tailwind.
+   Prefer using app/globals.css (imported in app/layout.tsx). */

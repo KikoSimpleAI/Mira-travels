@@ -1,14 +1,12 @@
 /* Global styles for Mira Travels
-   - Ensure Tailwind is available across the app
-   - Provide design tokens compatible with shadcn/ui (Tailwind v4 tokens)
-   - Stabilize border-border, bg-background, text-foreground, outline-ring, etc.
+   - Loads Tailwind
+   - Defines HSL color variables for light/dark themes
+   - Enables border-border, bg-background, text-foreground, etc. via Tailwind mapping
 */
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Dark mode variant helper */
-@custom-variant dark (&:is(.dark *));
-
+/* Light theme */
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -45,7 +43,7 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* Dark theme overrides */
+/* Dark theme */
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -81,8 +79,18 @@
   --sidebar-ring: oklch(0.439 0 0);
 }
 
-/* Theme tokens (Tailwind v4). These power utilities like bg-background and border-border */
+/* Optional helper */
+@layer utilities {
+  .container {
+    margin-inline: auto;
+    padding-inline: 1rem;
+    width: 100%;
+    max-width: 80rem;
+  }
+}
+
 @theme inline {
+  /* optional: --font-sans, --font-serif, --font-mono if they are applied in the layout.tsx */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -121,21 +129,12 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* Base resets + theme application */
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
-  }
-}
-
-/* Helpful utility tweaks */
-@layer utilities {
-  .container {
-    margin-inline: auto;
-    padding-inline: 1rem;
-    width: 100%;
-    max-width: 80rem; /* 1280px */
   }
 }

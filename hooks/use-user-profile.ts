@@ -1,17 +1,17 @@
 "use client"
 
-import { useState, useEffect } from 'react'
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
-import { useAuth } from './use-auth'
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
+import { doc, onSnapshot, setDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { useAuth } from "./use-auth"
 
 export interface UserProfile {
   name: string
   email: string
   bio: string
   location: string
-  travelStyle: 'explorer' | 'relaxer' | 'adventurer' | 'cultural' | 'budget'
-  budget: 'budget' | 'moderate' | 'luxury'
+  travelStyle: "explorer" | "relaxer" | "adventurer" | "cultural" | "budget"
+  budget: "budget" | "moderate" | "luxury"
   interests: string[]
   preferences: {
     rating: number
@@ -24,94 +24,127 @@ export interface UserProfile {
   createdAt: string
 }
 
+function defaultsFor(user: { displayName: string | null; email: string | null }): UserProfile {
+  return {
+    name: user.displayName || "User",
+    email: user.email || "",
+    bio: "",
+    location: "",
+    travelStyle: "explorer",
+    budget: "moderate",
+    interests: [],
+    preferences: {
+      rating: 80,
+      safety: 70,
+      cost: 60,
+      climate: 50,
+      activities: 70,
+      walkability: 40,
+    },
+    createdAt: new Date().toISOString(),
+  }
+}
+
 export function useUserProfile() {
   const { user } = useAuth()
   const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
+  const [isOffline, setIsOffline] = useState<boolean>(false)
 
+  // Prevent repeated default creation loops
+  const createdDefaultRef = useRef<boolean>(false)
+
+  const ref = useMemo(() => {
+    if (!user) return null
+    return doc(db, "users", user.uid)
+  }, [user])
+
+  // Live, cache-first subscription — avoids "client is offline" errors
   useEffect(() => {
-    if (!user) {
+    setError(null)
+    setIsOffline(false)
+    createdDefaultRef.current = false
+
+    if (!ref) {
       setProfile(null)
       setLoading(false)
       return
     }
 
-    loadProfile()
-  }, [user])
+    setLoading(true)
+    const unsub = onSnapshot(
+      ref,
+      { includeMetadataChanges: true },
+      async (snap) => {
+        // Mark offline if this emission came from cache
+        setIsOffline(snap.metadata.fromCache)
 
-  const loadProfile = async () => {
-    if (!user) return
-
-    try {
-      setLoading(true)
-      setError(null)
-      
-      const docRef = doc(db, 'users', user.uid)
-      const docSnap = await getDoc(docRef)
-      
-      if (docSnap.exists()) {
-        setProfile(docSnap.data() as UserProfile)
-      } else {
-        // Create default profile if it doesn't exist
-        const defaultProfile: UserProfile = {
-          name: user.displayName || 'User',
-          email: user.email || '',
-          bio: '',
-          location: '',
-          travelStyle: 'explorer',
-          budget: 'moderate',
-          interests: [],
-          preferences: {
-            rating: 80,
-            safety: 70,
-            cost: 60,
-            climate: 50,
-            activities: 70,
-            walkability: 40
-          },
-          createdAt: new Date().toISOString()
+        if (snap.exists()) {
+          setProfile(snap.data() as UserProfile)
+          setLoading(false)
+          return
         }
-        
-        await setDoc(docRef, defaultProfile)
-        setProfile(defaultProfile)
+
+        // No document yet: create a default once (queues offline and syncs later)
+        if (!createdDefaultRef.current && user) {
+          createdDefaultRef.current = true
+          try {
+            const defaults = defaultsFor({ displayName: user.displayName, email: user.email })
+            // merge:true ensures we don't override other fields if they were created elsewhere
+            await setDoc(ref, defaults, { merge: true })
+            // Optimistically update local state
+            setProfile((prev) => prev ?? defaults)
+          } catch {
+            // If we're offline and persistence is active, setDoc will queue.
+            // No need to surface an error; we'll keep showing empty/default UI until it syncs.
+          }
+        }
+        setLoading(false)
+      },
+      (err) => {
+        // Never throw — keep it in state for the UI
+        setError("Unable to load profile right now.")
+        setLoading(false)
+      },
+    )
+
+    return () => unsub()
+  }, [ref, user])
+
+  // Writes use setDoc({ merge: true }) so they queue when offline and sync later
+  const updateProfile = useCallback(
+    async (updates: Partial<UserProfile>) => {
+      if (!ref) return false
+      try {
+        await setDoc(ref, updates, { merge: true })
+        setProfile((prev) => (prev ? { ...prev, ...updates } : (updates as UserProfile)))
+        setError(null)
+        return true
+      } catch {
+        setError("Failed to update profile.")
+        return false
       }
-    } catch (err) {
-      console.error('Error loading profile:', err)
-      setError('Failed to load profile')
-    } finally {
-      setLoading(false)
-    }
-  }
+    },
+    [ref],
+  )
 
-  const updateProfile = async (updates: Partial<UserProfile>) => {
-    if (!user || !profile) return
-
-    try {
-      setError(null)
-      
-      const docRef = doc(db, 'users', user.uid)
-      await updateDoc(docRef, updates)
-      
-      setProfile({ ...profile, ...updates })
-      return true
-    } catch (err) {
-      console.error('Error updating profile:', err)
-      setError('Failed to update profile')
-      return false
-    }
-  }
-
-  const updatePreferences = async (preferences: UserProfile['preferences']) => {
-    return updateProfile({ preferences })
-  }
+  const updatePreferences = useCallback(
+    async (preferences: UserProfile["preferences"]) => updateProfile({ preferences }),
+    [updateProfile],
+  )
 
   return {
     profile,
     loading,
     error,
+    isOffline,
     updateProfile,
     updatePreferences,
-    refreshProfile: loadProfile
+    // expose a manual refresh that simply re-triggers the effect by toggling state
+    refreshProfile: () => {
+      // The onSnapshot is live; no-op provided for API parity
+      return Promise.resolve()
+    },
   }
 }
